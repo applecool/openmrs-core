@@ -76,6 +76,7 @@ import org.openmrs.api.ConceptService;
 import org.openmrs.api.context.Context;
 import org.openmrs.api.db.ConceptDAO;
 import org.openmrs.api.db.DAOException;
+import org.openmrs.util.ConceptMapTypeComparator;
 import org.openmrs.util.OpenmrsConstants;
 
 /**
@@ -378,7 +379,7 @@ public class HibernateConceptDAO implements ConceptDAO {
 	@SuppressWarnings("unchecked")
 	public List<Drug> getDrugs(String drugName, Concept concept, boolean includeRetired) throws DAOException {
 		Criteria searchCriteria = sessionFactory.getCurrentSession().createCriteria(Drug.class, "drug");
-		if (includeRetired == false)
+		if (!includeRetired)
 			searchCriteria.add(Restrictions.eq("drug.retired", false));
 		if (concept != null)
 			searchCriteria.add(Restrictions.eq("drug.concept", concept));
@@ -453,7 +454,7 @@ public class HibernateConceptDAO implements ConceptDAO {
 		Criteria crit = sessionFactory.getCurrentSession().createCriteria(ConceptClass.class);
 		
 		// Minor bug - was assigning includeRetired instead of evaluating
-		if (includeRetired == false)
+		if (!includeRetired)
 			crit.add(Restrictions.eq("retired", false));
 		
 		return crit.list();
@@ -475,6 +476,13 @@ public class HibernateConceptDAO implements ConceptDAO {
 	}
 	
 	/**
+	 * @see org.openmrs.api.db.ConceptDAO#purgeConceptNameTag(org.openmrs.ConceptNameTag)
+	 */
+	public void deleteConceptNameTag(ConceptNameTag cnt) throws DAOException {
+		sessionFactory.getCurrentSession().delete(cnt);
+	}
+	
+	/**
 	 * @see org.openmrs.api.db.ConceptDAO#getConceptDatatype(java.lang.Integer)
 	 */
 	public ConceptDatatype getConceptDatatype(Integer i) {
@@ -488,7 +496,7 @@ public class HibernateConceptDAO implements ConceptDAO {
 	public List<ConceptDatatype> getAllConceptDatatypes(boolean includeRetired) throws DAOException {
 		Criteria crit = sessionFactory.getCurrentSession().createCriteria(ConceptDatatype.class);
 		
-		if (includeRetired == false)
+		if (!includeRetired)
 			crit.add(Restrictions.eq("retired", false));
 		
 		return crit.list();
@@ -784,7 +792,7 @@ public class HibernateConceptDAO implements ConceptDAO {
 	public List<ConceptProposal> getAllConceptProposals(boolean includeCompleted) throws DAOException {
 		Criteria crit = sessionFactory.getCurrentSession().createCriteria(ConceptProposal.class);
 		
-		if (includeCompleted == false) {
+		if (!includeCompleted) {
 			crit.add(Restrictions.eq("state", OpenmrsConstants.CONCEPT_PROPOSAL_UNMAPPED));
 		}
 		crit.addOrder(Order.asc("originalText"));
@@ -928,7 +936,7 @@ public class HibernateConceptDAO implements ConceptDAO {
 	public List<ConceptSource> getAllConceptSources(boolean includeRetired) throws DAOException {
 		Criteria criteria = sessionFactory.getCurrentSession().createCriteria(ConceptSource.class);
 		
-		if (includeRetired == false)
+		if (!includeRetired)
 			criteria.add(Restrictions.eq("retired", false));
 		
 		return criteria.list();
@@ -1346,7 +1354,7 @@ public class HibernateConceptDAO implements ConceptDAO {
 			Criteria searchCriteria = sessionFactory.getCurrentSession().createCriteria(ConceptWord.class, "cw1");
 			searchCriteria.add(Restrictions.in("locale", locales));
 			
-			if (includeRetired == false) {
+			if (!includeRetired) {
 				searchCriteria.createAlias("concept", "concept");
 				searchCriteria.add(Restrictions.eq("concept.retired", false));
 			}
@@ -1401,7 +1409,7 @@ public class HibernateConceptDAO implements ConceptDAO {
 		if (StringUtils.isBlank(drugName) && concept == null)
 			return 0L;
 		
-		if (includeRetired == false)
+		if (!includeRetired)
 			searchCriteria.add(Restrictions.eq("drug.retired", false));
 		if (concept != null)
 			searchCriteria.add(Restrictions.eq("drug.concept", concept));
@@ -1421,6 +1429,13 @@ public class HibernateConceptDAO implements ConceptDAO {
 		return (Long) searchCriteria.uniqueResult();
 	}
 	
+	/**
+	 * @should return a drug if either the drug name or concept name matches the phase not both
+	 * @should return distinct drugs
+	 * @should return a drug, if phrase match concept_name No need to match both concept_name and drug_name
+	 * @should return drug when phrase match drug_name even searchDrugConceptNames is false
+	 * @should return a drug if phrase match drug_name No need to match both concept_name and drug_name
+	 */
 	@SuppressWarnings("unchecked")
 	@Override
 	public List<Drug> getDrugs(String drugName, Concept concept, boolean searchOnPhrase, boolean searchDrugConceptNames,
@@ -1429,18 +1444,20 @@ public class HibernateConceptDAO implements ConceptDAO {
 		if (StringUtils.isBlank(drugName) && concept == null)
 			return Collections.emptyList();
 		
-		if (includeRetired == false)
+		if (!includeRetired)
 			searchCriteria.add(Restrictions.eq("drug.retired", false));
-		if (concept != null)
-			searchCriteria.add(Restrictions.eq("drug.concept", concept));
 		MatchMode matchMode = MatchMode.START;
 		if (searchOnPhrase)
 			matchMode = MatchMode.ANYWHERE;
 		if (!StringUtils.isBlank(drugName)) {
-			searchCriteria.add(Restrictions.ilike("drug.name", drugName, matchMode));
-			if (searchDrugConceptNames) {
+			if (searchDrugConceptNames && concept != null) {
 				searchCriteria.createCriteria("concept", "concept").createAlias("concept.names", "names");
-				searchCriteria.add(Restrictions.ilike("names.name", drugName, matchMode));
+				searchCriteria.add(Restrictions.or(Restrictions.ilike("drug.name", drugName, matchMode), Restrictions.ilike(
+				    "names.name", drugName, matchMode)));
+				searchCriteria.setProjection(Projections.distinct(Projections.property("drugId")));
+			} else {
+				searchCriteria.add(Restrictions.ilike("drug.name", drugName, matchMode));
+				
 			}
 		}
 		
@@ -1592,7 +1609,11 @@ public class HibernateConceptDAO implements ConceptDAO {
 			criteria.add(Restrictions.eq("retired", false));
 		if (!includeHidden)
 			criteria.add(Restrictions.eq("isHidden", false));
-		return criteria.list();
+		
+		List<ConceptMapType> conceptMapTypes = criteria.list();
+		Collections.sort(conceptMapTypes, new ConceptMapTypeComparator());
+		
+		return conceptMapTypes;
 	}
 	
 	/**

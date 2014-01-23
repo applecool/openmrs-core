@@ -92,7 +92,7 @@
 			<openmrs:authentication>
 				<c:if test="${authenticatedUser != null}">
 					<span id="userLoggedInAs" class="firstChild">
-						<openmrs:message code="header.logged.in"/> ${authenticatedUser.personName}
+						<openmrs:message code="header.logged.in"/> <c:out value="${authenticatedUser.personName}" />
 					</span>
 					<span id="userLogout">
 						<a href='${pageContext.request.contextPath}/logout'><openmrs:message code="header.logout" /></a>
@@ -148,9 +148,12 @@
 				<c:if test="${varStatus.last}">
 					</div>
 					<div id="alertBar">
-						<img src="${pageContext.request.contextPath}/images/alert.gif" align="center" alt='<openmrs:message code="Alert.unreadAlert"/>' title='<openmrs:message code="Alert.unreadAlert"/>'/>
-						<c:if test="${varStatus.count == 1}"><openmrs:message code="Alert.unreadAlert"/></c:if>
-						<c:if test="${varStatus.count != 1}"><openmrs:message code="Alert.unreadAlerts" arguments="${varStatus.count}" /></c:if>
+						<img src="${pageContext.request.contextPath}/images/alert.gif" align="center" alt='<openmrs:message htmlEscape="false" code="Alert.unreadAlert"/>' title='<openmrs:message htmlEscape="false" code="Alert.unreadAlert"/>'/>
+						<c:if test="${varStatus.count == 1}"><openmrs:message htmlEscape="false" code="Alert.unreadAlert"/></c:if>
+						<c:if test="${varStatus.count != 1}"><openmrs:message htmlEscape="false" code="Alert.unreadAlerts" arguments="${varStatus.count}" /></c:if>
+						<a href="#markAllAsRead" onclick="return markAllAlertsRead(this)" HIDEFOCUS class="markAllAsRead" >
+							<img src="${pageContext.request.contextPath}/images/markRead.gif" alt='<openmrs:message code="Alert.markAllAsRead"/>' title='<openmrs:message code="Alert.markAllAlertsAsRead"/>' /> <span class="markAllAsRead"><openmrs:message code="Alert.markAllAsRead"/></span>
+						</a>
 					</div>
 					</div>
 				</c:if>

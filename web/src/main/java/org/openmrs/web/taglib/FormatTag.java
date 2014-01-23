@@ -24,6 +24,7 @@ import java.util.Set;
 
 import javax.servlet.jsp.tagext.TagSupport;
 
+import org.apache.commons.lang.StringEscapeUtils;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.lang.WordUtils;
 import org.apache.commons.logging.Log;
@@ -57,6 +58,7 @@ import org.openmrs.customdatatype.DownloadableDatatypeHandler;
 import org.openmrs.customdatatype.SingleCustomValue;
 import org.openmrs.util.OpenmrsConstants;
 import org.openmrs.web.attribute.handler.HtmlDisplayableDatatypeHandler;
+import org.springframework.web.util.HtmlUtils;
 import org.springframework.web.util.JavaScriptUtils;
 
 /**
@@ -335,7 +337,8 @@ public class FormatTag extends TagSupport {
 	 * @param form
 	 */
 	private void printForm(StringBuilder sb, Form form) {
-		sb.append(form.getName() + " (v" + form.getVersion() + ")");
+		String name = StringEscapeUtils.escapeHtml(form.getName());
+		sb.append(name + " (v" + form.getVersion() + ")");
 	}
 	
 	/**
@@ -356,14 +359,13 @@ public class FormatTag extends TagSupport {
 			} else {
 				sb.append(summary);
 				sb.append("...");
-				if (handler instanceof HtmlDisplayableDatatypeHandler) {
-					String link = "viewCustomValue.form?handler=" + handler.getClass().getName() + "&datatype="
-					        + datatype.getClass().getName() + "&value=" + val.getValueReference();
-					sb.append(" (<a target=\"_blank\" href=\"" + link + "\">"
-					        + Context.getMessageSourceService().getMessage("general.view") + "</a>)");
-				}
+				String link = "viewCustomValue.form?handler=" + handler.getClass().getName() + "&datatype="
+				        + datatype.getClass().getName() + "&value=" + val.getValueReference();
+				sb.append(" (<a target=\"_blank\" href=\"" + link + "\">"
+				        + Context.getMessageSourceService().getMessage("general.view") + "</a>)");
+				
 				if (handler instanceof DownloadableDatatypeHandler) {
-					String link = "downloadCustomValue.form?handler=" + handler.getClass().getName() + "&datatype="
+					link = "downloadCustomValue.form?handler=" + handler.getClass().getName() + "&datatype="
 					        + datatype.getClass().getName() + "&value=" + val.getValueReference();
 					sb.append(" (<a href=\"" + link + "\">"
 					        + Context.getMessageSourceService().getMessage("general.download") + "</a>)");
@@ -391,6 +393,7 @@ public class FormatTag extends TagSupport {
 	 * @param sb
 	 * @param concept
 	 * @should print the name with the correct name and type
+	 * @should escape html tags
 	 */
 	protected void printConcept(StringBuilder sb, Concept concept) {
 		Locale loc = Context.getLocale();
@@ -408,17 +411,17 @@ public class FormatTag extends TagSupport {
 			
 			ConceptName name = concept.getName(loc, lookForNameType, lookForNameTag);
 			if (name != null) {
-				sb.append(applyConversion(name.getName()));
+				sb.append(applyConversion(HtmlUtils.htmlEscape(name.getName())));
 				return;
 			}
 		}
 		
 		ConceptName name = concept.getPreferredName(loc);
 		if (name != null) {
-			sb.append(applyConversion(name.getName()));
+			sb.append(applyConversion(HtmlUtils.htmlEscape(name.getName())));
 			return;
 		}
-		sb.append(applyConversion(concept.getDisplayString()));
+		sb.append(applyConversion(HtmlUtils.htmlEscape(concept.getDisplayString())));
 	}
 	
 	/**
@@ -588,10 +591,10 @@ public class FormatTag extends TagSupport {
 	private LinkedHashSet<Provider> filterProviders(Map<EncounterRole, Set<Provider>> encounterProviders, String[] rolesArray) {
 		LinkedHashSet<Provider> filteredProviders = new LinkedHashSet<Provider>();
 		
-		Set<EncounterRole> roles = encounterProviders.keySet();
-		for (EncounterRole encounterRole : roles) {
+		for (Map.Entry<EncounterRole, Set<Provider>> entry : encounterProviders.entrySet()) {
+			EncounterRole encounterRole = entry.getKey();
 			if (containsRole(encounterRole, rolesArray)) {
-				filteredProviders.addAll(encounterProviders.get(encounterRole));
+				filteredProviders.addAll(entry.getValue());
 			}
 		}
 		

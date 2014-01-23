@@ -177,8 +177,9 @@ public class ConceptValidator implements Validator {
 									continue;
 								
 								//skip same
-								if (conceptToValidate.getConceptId() != null
-								        && conceptToValidate.getConceptId().equals(concept.getConceptId()))
+								String uuid = conceptToValidate.getUuid();
+								if (conceptToValidate.getConceptId() != null && uuid != null
+								        && uuid.equals(concept.getUuid()))
 									continue;
 								
 								//should be a unique name amongst all preferred and fully specified names in its locale system wide
@@ -230,11 +231,7 @@ public class ConceptValidator implements Validator {
 			int index = 0;
 			Set<Integer> mappedTermIds = null;
 			for (ConceptMap map : conceptToValidate.getConceptMappings()) {
-				if (map.getConceptReferenceTerm() == null) {
-					errors.rejectValue("conceptMappings[" + index + "].conceptReferenceTerm", "Concept.map.termRequired",
-					    "The concept reference term property is required for a concept map");
-					return;
-				} else if (map.getConceptReferenceTerm().getConceptReferenceTermId() == null) {
+				if (map.getConceptReferenceTerm().getConceptReferenceTermId() == null) {
 					//if this term is getting created on the fly e.g. from old legacy code, validate it
 					try {
 						errors.pushNestedPath("conceptMappings[" + index + "].conceptReferenceTerm");

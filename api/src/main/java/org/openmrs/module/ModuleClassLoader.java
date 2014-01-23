@@ -21,6 +21,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.MalformedURLException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.net.URLStreamHandlerFactory;
@@ -30,6 +32,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Enumeration;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
@@ -61,11 +64,17 @@ public class ModuleClassLoader extends URLClassLoader {
 	
 	private Module[] awareOfModules;
 	
-	private Map<URL, File> libraryCache;
+	private Map<URI, File> libraryCache;
 	
 	private boolean probeParentLoaderLast = true;
 	
 	private Set<String> additionalPackages = new LinkedHashSet<String>();
+	
+	/**
+	 * Holds a list of all classes for this classloader so that they can be cleaned up.
+	 * This is also used to fix: https://tickets.openmrs.org/browse/TRUNK-4053
+	 */
+	private Map<String, Class<?>> loadedClasses = new HashMap<String, Class<?>>();
 	
 	/**
 	 * @param module Module
@@ -86,7 +95,7 @@ public class ModuleClassLoader extends URLClassLoader {
 		collectRequiredModuleImports();
 		collectAwareOfModuleImports();
 		collectFilters();
-		libraryCache = new WeakHashMap<URL, File>();
+		libraryCache = new WeakHashMap<URI, File>();
 	}
 	
 	/**
@@ -364,7 +373,7 @@ public class ModuleClassLoader extends URLClassLoader {
 		// repopulate resource URLs
 		//resourceLoader = ModuleResourceLoader.get(getModule());
 		collectFilters();
-		for (Iterator<Map.Entry<URL, File>> it = libraryCache.entrySet().iterator(); it.hasNext();) {
+		for (Iterator<Map.Entry<URI, File>> it = libraryCache.entrySet().iterator(); it.hasNext();) {
 			if (it.next().getValue() == null) {
 				it.remove();
 			}
@@ -387,6 +396,8 @@ public class ModuleClassLoader extends URLClassLoader {
 		requiredModules = null;
 		awareOfModules = null;
 		//resourceLoader = null;
+		
+		loadedClasses.clear();
 	}
 	
 	/**
@@ -405,6 +416,19 @@ public class ModuleClassLoader extends URLClassLoader {
 	@Override
 	protected Class<?> loadClass(final String name, final boolean resolve) throws ClassNotFoundException {
 		Class<?> result = null;
+		
+		//if this class was already loaded by some other class loader, do not load it again.
+		Collection<ModuleClassLoader> classLoaders = ModuleFactory.getModuleClassLoaders();
+		for (ModuleClassLoader classLoader : classLoaders) {
+			if (classLoader == this)
+				continue;
+			
+			result = classLoader.getClassIfLoaded(name);
+			if (result != null) {
+				return result;
+			}
+		}
+		
 		if (probeParentLoaderLast) {
 			try {
 				result = loadClass(name, resolve, this, null);
@@ -430,8 +454,14 @@ public class ModuleClassLoader extends URLClassLoader {
 			}
 		}
 		
-		if (result != null)
+		if (result != null) {
+			//add only if this is its class loader
+			if (result.getClassLoader() == this) {
+				loadedClasses.put(name, result);
+			}
+			
 			return result;
+		}
 		
 		throw new ClassNotFoundException(name);
 	}
@@ -569,6 +599,16 @@ public class ModuleClassLoader extends URLClassLoader {
 	}
 	
 	/**
+	 * Gets a class instance if it was already loaded by this class loader.
+	 * 
+	 * @param name String path and name of the class to load.
+	 * @return the class instance if it was already loaded, else null.
+	 */
+	public Class<?> getClassIfLoaded(final String name) {
+		return loadedClasses.get(name);
+	}
+	
+	/**
 	 * Checking the given class's visibility in this module
 	 * 
 	 * @param cls Class to check
@@ -688,8 +728,17 @@ public class ModuleClassLoader extends URLClassLoader {
 	 */
 	protected File cacheLibrary(final URL libUrl, final String libname) {
 		File cacheFolder = OpenmrsClassLoader.getLibCacheFolder();
-		if (libraryCache.containsKey(libUrl)) {
-			return libraryCache.get(libUrl);
+		
+		URI libUri;
+		try {
+			libUri = libUrl.toURI();
+		}
+		catch (URISyntaxException e) {
+			throw new IllegalArgumentException(libUrl.getPath() + " is not a valid URI", e);
+		}
+		
+		if (libraryCache.containsKey(libUri)) {
+			return libraryCache.get(libUri);
 		}
 		
 		File result = null;
@@ -736,7 +785,7 @@ public class ModuleClassLoader extends URLClassLoader {
 			}
 			
 			// save a link to the cached file
-			libraryCache.put(libUrl, result);
+			libraryCache.put(libUri, result);
 			
 			if (log.isDebugEnabled()) {
 				log.debug("library " + libname + " successfully cached from URL " + libUrl + " and saved to local file "
@@ -746,7 +795,7 @@ public class ModuleClassLoader extends URLClassLoader {
 		}
 		catch (IOException ioe) {
 			log.error("can't cache library " + libname + " from URL " + libUrl, ioe);
-			libraryCache.put(libUrl, null);
+			libraryCache.put(libUri, null);
 			result = null;
 		}
 		
@@ -943,11 +992,9 @@ public class ModuleClassLoader extends URLClassLoader {
 		if (this == requestor) {
 			return true;
 		}
-		@SuppressWarnings("unused")
-		URL lib;
 		try {
 			String file = url.getFile();
-			lib = new URL(url.getProtocol(), url.getHost(), file.substring(0, file.length() - name.length()));
+			new URL(url.getProtocol(), url.getHost(), file.substring(0, file.length() - name.length()));
 		}
 		catch (MalformedURLException mue) {
 			log.error("can't get resource library URL", mue);

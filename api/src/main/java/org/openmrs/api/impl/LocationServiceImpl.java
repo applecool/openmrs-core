@@ -16,6 +16,7 @@ package org.openmrs.api.impl;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 
 import org.openmrs.Address;
 import org.openmrs.Location;
@@ -81,7 +82,8 @@ public class LocationServiceImpl extends BaseOpenmrsService implements LocationS
 				}
 			}
 		}
-		
+		//Check for XSS
+		location.validateXSS();
 		CustomDatatypeUtil.saveAttributesIfNecessary(location);
 		
 		return dao.saveLocation(location);
@@ -113,20 +115,20 @@ public class LocationServiceImpl extends BaseOpenmrsService implements LocationS
 		    OpenmrsConstants.GLOBAL_PROPERTY_DEFAULT_LOCATION_NAME);
 		
 		if (StringUtils.hasText(locationGP))
-			location = getLocation(locationGP);
+			location = Context.getLocationService().getLocation(locationGP);
 		
 		//Try to look up 'Unknown Location' in case the global property is something else
 		if (location == null && (!StringUtils.hasText(locationGP) || !locationGP.equalsIgnoreCase("Unknown Location")))
-			location = getLocation("Unknown Location");
+			location = Context.getLocationService().getLocation("Unknown Location");
 		
 		// If Unknown Location does not exist, try Unknown if the global property was different
 		if (location == null && (!StringUtils.hasText(locationGP) || !locationGP.equalsIgnoreCase("Unknown"))) {
-			location = getLocation("Unknown");
+			location = Context.getLocationService().getLocation("Unknown");
 		}
 		
 		// If neither exist, get the first available location
 		if (location == null) {
-			location = getLocation(Integer.valueOf(1));
+			location = Context.getLocationService().getLocation(Integer.valueOf(1));
 		}
 		
 		// TODO Figure out if we should/could throw an exception if there's  
@@ -175,7 +177,7 @@ public class LocationServiceImpl extends BaseOpenmrsService implements LocationS
 	 */
 	@Transactional(readOnly = true)
 	public List<Location> getLocations(String nameFragment) throws APIException {
-		return getLocations(nameFragment, false, null, null);
+		return Context.getLocationService().getLocations(nameFragment, null, null, false, null, null);
 	}
 	
 	/**
@@ -229,7 +231,7 @@ public class LocationServiceImpl extends BaseOpenmrsService implements LocationS
 	public Location retireLocation(Location location, String reason) throws APIException {
 		location.setRetired(true);
 		location.setRetireReason(reason);
-		return saveLocation(location);
+		return Context.getLocationService().saveLocation(location);
 	}
 	
 	/**
@@ -237,7 +239,7 @@ public class LocationServiceImpl extends BaseOpenmrsService implements LocationS
 	 */
 	public Location unretireLocation(Location location) throws APIException {
 		location.setRetired(false);
-		return saveLocation(location);
+		return Context.getLocationService().saveLocation(location);
 	}
 	
 	/**
@@ -292,7 +294,7 @@ public class LocationServiceImpl extends BaseOpenmrsService implements LocationS
 	@Transactional(readOnly = true)
 	public List<LocationTag> getLocationTags(String search) throws APIException {
 		if (search == null || search.equals(""))
-			return getAllLocationTags(true);
+			return Context.getLocationService().getAllLocationTags(true);
 		
 		return dao.getLocationTags(search);
 	}
@@ -310,7 +312,7 @@ public class LocationServiceImpl extends BaseOpenmrsService implements LocationS
 			tag.setRetireReason(reason);
 			tag.setRetiredBy(Context.getAuthenticatedUser());
 			tag.setDateRetired(new Date());
-			return saveLocationTag(tag);
+			return Context.getLocationService().saveLocationTag(tag);
 		}
 	}
 	
@@ -322,7 +324,7 @@ public class LocationServiceImpl extends BaseOpenmrsService implements LocationS
 		tag.setRetireReason(null);
 		tag.setRetiredBy(null);
 		tag.setDateRetired(null);
-		return saveLocationTag(tag);
+		return Context.getLocationService().saveLocationTag(tag);
 	}
 	
 	/**
@@ -345,10 +347,25 @@ public class LocationServiceImpl extends BaseOpenmrsService implements LocationS
 	 * @see LocationService#getLocations(String, boolean, Integer, Integer)
 	 */
 	@Override
+	@Deprecated
 	@Transactional(readOnly = true)
 	public List<Location> getLocations(String nameFragment, boolean includeRetired, Integer start, Integer length)
 	        throws APIException {
-		return dao.getLocations(nameFragment, includeRetired, start, length);
+		return dao.getLocations(nameFragment, null, null, includeRetired, start, length);
+	}
+	
+	/**
+	 * @see LocationService#getLocations(String, org.openmrs.Location, java.util.Map, boolean,
+	 *      Integer, Integer)
+	 */
+	@Override
+	public List<Location> getLocations(String nameFragment, Location parent,
+	        Map<LocationAttributeType, Object> attributeValues, boolean includeRetired, Integer start, Integer length) {
+		
+		Map<LocationAttributeType, String> serializedAttributeValues = CustomDatatypeUtil
+		        .getValueReferences(attributeValues);
+		
+		return dao.getLocations(nameFragment, parent, serializedAttributeValues, includeRetired, start, length);
 	}
 	
 	/**
@@ -361,7 +378,8 @@ public class LocationServiceImpl extends BaseOpenmrsService implements LocationS
 	}
 	
 	/**
-	 * @see org.openmrs.api.LocationService#getPossibleAddressValues(org.openmrs.Address, org.openmrs.AddressField)
+	 * @see org.openmrs.api.LocationService#getPossibleAddressValues(org.openmrs.Address,
+	 *      org.openmrs.AddressField)
 	 */
 	public List<String> getPossibleAddressValues(Address incomplete, String fieldName) throws APIException {
 		// not implemented by default
@@ -404,7 +422,8 @@ public class LocationServiceImpl extends BaseOpenmrsService implements LocationS
 	}
 	
 	/**
-	 * @see org.openmrs.api.LocationService#retireLocationAttributeType(org.openmrs.LocationAttributeType, java.lang.String)
+	 * @see org.openmrs.api.LocationService#retireLocationAttributeType(org.openmrs.LocationAttributeType,
+	 *      java.lang.String)
 	 */
 	@Override
 	public LocationAttributeType retireLocationAttributeType(LocationAttributeType locationAttributeType, String reason) {

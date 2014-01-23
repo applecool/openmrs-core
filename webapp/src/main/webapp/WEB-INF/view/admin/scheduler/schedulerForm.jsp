@@ -142,7 +142,7 @@ window.onload = init;
 
 
 <spring:hasBindErrors name="concept">
-	<openmrs:message code="fix.error"/>
+	<openmrs:message htmlEscape="false" code="fix.error"/>
 	<div class="error">
 		<c:forEach items="${errors.allErrors}" var="error">
 			<openmrs:message code="${error.code}" text="${error.code}"/><br/><!-- ${error} -->
@@ -152,7 +152,7 @@ window.onload = init;
 </spring:hasBindErrors>
 
 <spring:hasBindErrors name="task">
-	<openmrs:message code="fix.error"/>
+	<openmrs:message htmlEscape="false" code="fix.error"/>
 	<br />
 </spring:hasBindErrors>
 
@@ -276,7 +276,7 @@ window.onload = init;
 			<td valign="top"><openmrs:message code="Scheduler.scheduleForm.repeatInterval"/>:</td>
 			<td>
 				<spring:bind path="task.repeatInterval">
-					<input type="text" id="repeatInterval" name="repeatInterval" size="10" value="${status.value}" /> 
+					<input type="text" id="repeatInterval" name="repeatInterval" size="10" value="${repeatInterval}" /> 
 					<select name="repeatIntervalUnits">
 						<option value="seconds" <c:if test="${units=='seconds'}">selected</c:if>><openmrs:message code="Scheduler.scheduleForm.repeatInterval.units.seconds" /></option>
 						<option value="minutes" <c:if test="${units=='minutes'}">selected</c:if>><openmrs:message code="Scheduler.scheduleForm.repeatInterval.units.minutes" /></option>
@@ -307,8 +307,8 @@ window.onload = init;
 			</tr>
 			<c:forEach var="property" items="${task.properties}">			
 			<tr>
-				<td><input type="text" name="propertyName" size="20" value="${property.key}" /></td>
-				<td><input type="text" name="propertyValue" size="30" value="${property.value}" /></td>
+				<td><input type="text" name="propertyName" size="20" value="<spring:message text="${property.key}" htmlEscape="true"/>" /></td>
+				<td><input type="text" name="propertyValue" size="30" value="<spring:message text="${ property.value }" htmlEscape="true"/>" /></td>
 				<td><input type="button" class="closeButton" onclick="removeProperty(this)" value="<openmrs:message code="Scheduler.propertyForm.remove"/>"></td>
 			</tr>
 			</c:forEach>

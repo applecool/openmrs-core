@@ -36,6 +36,7 @@ import org.openmrs.api.context.Context;
 import org.openmrs.api.db.DAOException;
 import org.openmrs.api.db.UserDAO;
 import org.openmrs.patient.impl.LuhnIdentifierValidator;
+import org.openmrs.util.OpenmrsConstants;
 import org.openmrs.util.OpenmrsUtil;
 import org.openmrs.util.PrivilegeConstants;
 import org.openmrs.util.RoleConstants;
@@ -136,7 +137,7 @@ public class UserServiceImpl extends BaseOpenmrsService implements UserService {
 		List<Role> roles = new Vector<Role>();
 		roles.add(role);
 		
-		return getUsers(null, roles, false);
+		return Context.getUserService().getUsers(null, roles, false);
 	}
 	
 	/**
@@ -215,7 +216,7 @@ public class UserServiceImpl extends BaseOpenmrsService implements UserService {
 	 */
 	@Transactional(readOnly = true)
 	public List<User> getUsers() throws APIException {
-		return getAllUsers();
+		return Context.getUserService().getAllUsers();
 	}
 	
 	/**
@@ -232,7 +233,7 @@ public class UserServiceImpl extends BaseOpenmrsService implements UserService {
 	 */
 	@Transactional(readOnly = true)
 	public List<Privilege> getPrivileges() throws APIException {
-		return getAllPrivileges();
+		return Context.getUserService().getAllPrivileges();
 	}
 	
 	/**
@@ -274,7 +275,7 @@ public class UserServiceImpl extends BaseOpenmrsService implements UserService {
 	 */
 	@Transactional(readOnly = true)
 	public List<Role> getRoles() throws APIException {
-		return getAllRoles();
+		return Context.getUserService().getAllRoles();
 	}
 	
 	/**
@@ -391,7 +392,7 @@ public class UserServiceImpl extends BaseOpenmrsService implements UserService {
 			rolesToSearch.add(new Role(role));
 		}
 		
-		return getUsers(name, rolesToSearch, includeVoided);
+		return Context.getUserService().getUsers(name, rolesToSearch, includeVoided);
 	}
 	
 	/**
@@ -400,7 +401,7 @@ public class UserServiceImpl extends BaseOpenmrsService implements UserService {
 	 */
 	@Transactional(readOnly = true)
 	public List<User> findUsers(String givenName, String familyName, boolean includeVoided) {
-		return getUsersByName(givenName, familyName, includeVoided);
+		return Context.getUserService().getUsersByName(givenName, familyName, includeVoided);
 	}
 	
 	/**
@@ -425,7 +426,7 @@ public class UserServiceImpl extends BaseOpenmrsService implements UserService {
 	 */
 	@Transactional(readOnly = true)
 	public List<User> getAllUsers(List<Role> roles, boolean includeVoided) {
-		return getUsers(null, roles, includeVoided);
+		return Context.getUserService().getUsers(null, roles, includeVoided);
 	}
 	
 	/**
@@ -433,7 +434,7 @@ public class UserServiceImpl extends BaseOpenmrsService implements UserService {
 	 */
 	@Transactional(readOnly = true)
 	public List<User> getUsers(String nameSearch, List<Role> roles, boolean includeVoided) throws APIException {
-		return getUsers(nameSearch, roles, includeVoided, null, null);
+		return Context.getUserService().getUsers(nameSearch, roles, includeVoided, null, null);
 	}
 	
 	/**
@@ -443,16 +444,15 @@ public class UserServiceImpl extends BaseOpenmrsService implements UserService {
 	 */
 	private void checkPrivileges(User user) {
 		Collection<Role> roles = user.getAllRoles();
-		User authUser = Context.getAuthenticatedUser();
-		
 		List<String> requiredPrivs = new Vector<String>();
 		
 		for (Role r : roles) {
-			if (r.getRole().equals(RoleConstants.SUPERUSER) && !authUser.hasRole(RoleConstants.SUPERUSER))
+			if (r.getRole().equals(RoleConstants.SUPERUSER)
+			        && !Context.hasPrivilege(PrivilegeConstants.ASSIGN_SYSTEM_DEVELOPER_ROLE))
 				throw new APIException("You must have the role '" + RoleConstants.SUPERUSER + "' in order to assign it.");
 			if (r.getPrivileges() != null) {
 				for (Privilege p : r.getPrivileges())
-					if (!authUser.hasPrivilege(p.getPrivilege()))
+					if (!Context.hasPrivilege(p.getPrivilege()))
 						requiredPrivs.add(p.getPrivilege());
 			}
 		}
@@ -479,7 +479,7 @@ public class UserServiceImpl extends BaseOpenmrsService implements UserService {
 			user.setUserProperty(key, value);
 			try {
 				Context.addProxyPrivilege(PrivilegeConstants.EDIT_USERS);
-				saveUser(user, null);
+				Context.getUserService().saveUser(user, null);
 			}
 			finally {
 				Context.removeProxyPrivilege(PrivilegeConstants.EDIT_USERS);
@@ -505,7 +505,7 @@ public class UserServiceImpl extends BaseOpenmrsService implements UserService {
 			
 			try {
 				Context.addProxyPrivilege(PrivilegeConstants.EDIT_USERS);
-				saveUser(user, null);
+				Context.getUserService().saveUser(user, null);
 			}
 			finally {
 				Context.removeProxyPrivilege(PrivilegeConstants.EDIT_USERS);
@@ -688,8 +688,8 @@ public class UserServiceImpl extends BaseOpenmrsService implements UserService {
 			throw new APIException("No Authenticated user found");
 		}
 		user.getUserProperties().clear();
-		for (String key : properties.keySet()) {
-			user.setUserProperty(key, properties.get(key));
+		for (Map.Entry<String, String> entry : properties.entrySet()) {
+			user.setUserProperty(entry.getKey(), entry.getValue());
 		}
 		return dao.saveUser(user, null);
 	}

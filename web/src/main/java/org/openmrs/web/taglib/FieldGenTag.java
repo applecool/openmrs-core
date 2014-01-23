@@ -101,7 +101,6 @@ public class FieldGenTag extends TagSupport {
 					if (val != null) {
 						startVal = val.toString();
 					}
-					startVal = (startVal == null) ? "" : startVal;
 					if (startVal.length() > 1)
 						startVal = startVal.substring(0, 1);
 					String fieldLength = this.parameterMap != null ? (String) this.parameterMap.get("fieldLength") : null;
@@ -197,7 +196,7 @@ public class FieldGenTag extends TagSupport {
 					try {
 						cls = Class.forName(className);
 					}
-					catch (Throwable t) {
+					catch (Exception e) {
 						cls = null;
 						log.error("Could not instantiate class for this enum of class name [" + className
 						        + "] in FieldGenTag");

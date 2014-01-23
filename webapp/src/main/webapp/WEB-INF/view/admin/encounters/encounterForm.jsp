@@ -213,13 +213,13 @@
 </style>
 
 <c:if test="${encounter.patient.patientId != null}">
-<a href="../../patientDashboard.form?patientId=${encounter.patient.patientId}"><openmrs:message code="patientDashboard.viewDashboard"/></a>
+<a href="../../patientDashboard.form?patientId=<c:out value="${encounter.patient.patientId}" />"><openmrs:message code="patientDashboard.viewDashboard"/></a>
 </c:if>
 
 <h2><openmrs:message code="Encounter.manage.title"/></h2>
 
 <spring:hasBindErrors name="encounter">
-	<openmrs:message code="fix.error"/>
+	<openmrs:message htmlEscape="false" code="fix.error"/>
 	<div class="error">
 		<c:forEach items="${errors.allErrors}" var="error">
 			<openmrs:message code="${error.code}" text="${error.code}"/><br/>
@@ -270,7 +270,7 @@
 					<c:forEach items="${patientVisits}" var="visit">
 						<option value="${visit.visitId}" <c:if test="${visit.visitId == status.value}">selected="selected"</c:if>>
 							 <openmrs:formatDate date="${visit.startDatetime}" />
-							 ${visit.visitType.name} ${visit.patient.personName}
+							 ${visit.visitType.name} <c:out value="${visit.patient.personName}" />
 							<c:if test="${visit.indication != null}"> ${visit.indication.name}</c:if>
 							<c:if test="${visit.location != null}"> ${visit.location}</c:if>
 						</option>
@@ -333,7 +333,7 @@
 			<tr>
 				<th><openmrs:message code="general.createdBy" /></th>
 				<td>
-					<a href="#View User" onclick="return gotoUser(null, '${encounter.creator.userId}')">${encounter.creator.personName}</a> -
+					<a href="#View User" onclick="return gotoUser(null, '${encounter.creator.userId}')"><c:out value="${encounter.creator.personName}" /></a> -
 					<openmrs:formatDate date="${encounter.dateCreated}" type="medium" />
 				</td>
 			</tr>
@@ -360,7 +360,7 @@
 				<tr id="voidedBy">
 					<th><openmrs:message code="general.voidedBy" /></th>
 					<td>
-						<a href="#View User" onclick="return gotoUser(null, '${encounter.voidedBy.userId}')">${encounter.voidedBy.personName}</a> -
+						<a href="#View User" onclick="return gotoUser(null, '${encounter.voidedBy.userId}')"><c:out value="${encounter.voidedBy.personName}" /></a> -
 						<openmrs:formatDate date="${encounter.dateVoided}" type="medium" />
 					</td>
 				</tr>
@@ -390,7 +390,7 @@
 					<td>${provider}
 						<input type="hidden" name="providerIds" value="${provider.providerId}" />
 					</td>
-					<td>${provider.identifier}</td>
+					<td><c:out value="${provider.identifier}" /></td>
 					<td><input type="button" value='<openmrs:message code="general.remove"/>' class="smallButton" onClick="removeProvider(this, ${providerRole.key.encounterRoleId}, ${provider.providerId})" /></td>
 				</tr>
 			</c:forEach>
@@ -401,7 +401,7 @@
 					<option value=""></option>
 					<c:forEach items="${encounterRoles}" var="encounterRole">
 						<option value="${encounterRole.encounterRoleId}">
-							${encounterRole.name}
+							<c:out value="${encounterRole.name}" />
 						</option>
 					</c:forEach>
 				</select>
@@ -430,6 +430,16 @@
 	&nbsp;
 	<input type="button" value='<openmrs:message code="general.cancel"/>' onclick="history.go(-1); return; document.location='index.htm?autoJump=false&phrase=<request:parameter name="phrase"/>'">
 	</form>
+
+<!-- If new encounter add a provider row by default -->	
+<c:if test="${encounter.encounterId == null}">
+	<script>
+		var providerIds = document.getElementsByName("providerIds");
+		if(providerIds.length == 1) {
+			addProvider();
+		}		
+	</script>
+</c:if>
 	
 <c:if test="${encounter.encounterId != null}">
 	<br/>

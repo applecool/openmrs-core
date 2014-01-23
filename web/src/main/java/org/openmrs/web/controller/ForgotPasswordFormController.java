@@ -77,7 +77,7 @@ public class ForgotPasswordFormController extends SimpleFormController {
 		
 		String username = request.getParameter("uname");
 		
-		String ipAddress = request.getLocalAddr();
+		String ipAddress = request.getRemoteAddr();
 		Integer forgotPasswordAttempts = loginAttemptsByIP.get(ipAddress);
 		if (forgotPasswordAttempts == null)
 			forgotPasswordAttempts = 1;
@@ -136,7 +136,7 @@ public class ForgotPasswordFormController extends SimpleFormController {
 					forgotPasswordAttempts = 0;
 				}
 				
-			} else if (secretAnswer != null) {
+			} else {
 				// if they've filled in the username and entered their secret answer
 				
 				User user = null;

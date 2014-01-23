@@ -13,6 +13,7 @@
  */
 package org.openmrs.api.context;
 
+import org.openmrs.User;
 import org.openmrs.api.APIAuthenticationException;
 import org.openmrs.api.APIException;
 import org.openmrs.api.OpenmrsService;
@@ -70,8 +71,8 @@ public class Daemon {
 					Context.openSession();
 					returnedObject = ModuleFactory.startModuleInternal(module, isOpenmrsStartup, applicationContext);
 				}
-				catch (Throwable t) {
-					exceptionThrown = t;
+				catch (Exception e) {
+					exceptionThrown = e;
 				}
 				finally {
 					Context.closeSession();
@@ -130,8 +131,8 @@ public class Daemon {
 					Context.openSession();
 					TimerSchedulerTask.execute(task);
 				}
-				catch (Throwable t) {
-					exceptionThrown = t;
+				catch (Exception e) {
+					exceptionThrown = e;
 				}
 				finally {
 					Context.closeSession();
@@ -221,8 +222,8 @@ public class Daemon {
 					Context.openSession();
 					service.onStartup();
 				}
-				catch (Throwable t) {
-					exceptionThrown = t;
+				catch (Exception e) {
+					exceptionThrown = e;
 				}
 				finally {
 					Context.closeSession();
@@ -326,5 +327,20 @@ public class Daemon {
 		public Throwable getExceptionThrown() {
 			return exceptionThrown;
 		}
+	}
+	
+	/**
+	 * Checks whether user is Daemon.
+	 * However this is not the preferred method for checking to see if the current thread is a daemon thread,
+	 * 				rather use Daemon.isDeamonThread().
+	 * isDaemonThread is preferred for checking to see if you are in that thread or if the current thread is daemon.
+	 * 
+	 * @param user, user whom we are checking if daemon
+	 * @return true if user is Daemon
+	 * @should return true for a daemon user
+	 * @should return false if the user is not a daemon
+	 */
+	public static boolean isDaemonUser(User user) {
+		return DAEMON_USER_UUID.equals(user.getUuid());
 	}
 }

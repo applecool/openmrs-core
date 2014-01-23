@@ -47,6 +47,7 @@ import org.openmrs.api.context.Context;
 import org.openmrs.hl7.HL7Constants;
 import org.openmrs.hl7.HL7InQueueProcessor;
 import org.openmrs.hl7.HL7Service;
+import org.openmrs.obs.ComplexData;
 import org.openmrs.util.OpenmrsConstants;
 import org.openmrs.util.OpenmrsUtil;
 import org.springframework.util.StringUtils;
@@ -64,6 +65,7 @@ import ca.uhn.hl7v2.model.v25.datatype.CX;
 import ca.uhn.hl7v2.model.v25.datatype.DLD;
 import ca.uhn.hl7v2.model.v25.datatype.DT;
 import ca.uhn.hl7v2.model.v25.datatype.DTM;
+import ca.uhn.hl7v2.model.v25.datatype.ED;
 import ca.uhn.hl7v2.model.v25.datatype.EI;
 import ca.uhn.hl7v2.model.v25.datatype.FT;
 import ca.uhn.hl7v2.model.v25.datatype.ID;
@@ -108,6 +110,7 @@ public class ORUR01Handler implements Application {
 	 * 
 	 * @return true
 	 */
+	@Override
 	public boolean canProcess(Message message) {
 		return message != null && "ORU_R01".equals(message.getName());
 	}
@@ -139,8 +142,10 @@ public class ORUR01Handler implements Application {
 	 * @should fail if the provider name type code is not specified and is not a personId
 	 * @should understand form uuid if present
 	 * @should prefer form uuid over id if both are present
-	 * @should prefer form id if uuid is not found	 
+	 * @should prefer form id if uuid is not found
+	 * @should set complex data for obs with complex concepts
 	 */
+	@Override
 	public Message processMessage(Message message) throws ApplicationException {
 		
 		if (!(message instanceof ORU_R01))
@@ -154,12 +159,13 @@ public class ORUR01Handler implements Application {
 			response = processORU_R01(oru);
 		}
 		catch (ClassCastException e) {
-			log.error("Error casting " + message.getClass().getName() + " to ORU_R01", e);
-			throw new ApplicationException("Invalid message type for handler");
+			log.warn("Error casting " + message.getClass().getName() + " to ORU_R01", e);
+			throw new ApplicationException("Invalid message type for handler. Error casting " + message.getClass().getName()
+			        + " to ORU_R01", e);
 		}
 		catch (HL7Exception e) {
-			log.error("Error while processing ORU_R01 message", e);
-			throw new ApplicationException(e);
+			log.warn("Error while processing ORU_R01 message", e);
+			throw new ApplicationException("Error while processing ORU_R01 message", e);
 		}
 		
 		log.debug("Finished processing ORU_R01 message");
@@ -254,7 +260,9 @@ public class ORUR01Handler implements Application {
 			OBR obr = orderObs.getOBR();
 			
 			if (!StringUtils.hasText(obr.getUniversalServiceIdentifier().getIdentifier().getValue())) {
-				throw new HL7Exception("Check to ensure that the form's OBS section is a concept field. Invalid OBR in hl7 message with uid: " + messageControlId);
+				throw new HL7Exception(
+				        "Check to ensure that the form's OBS section is a concept field. Invalid OBR in hl7 message with uid: "
+				                + messageControlId);
 			}
 			
 			// if we're not ignoring this obs group, create an
@@ -745,29 +753,47 @@ public class ORUR01Handler implements Application {
 			}
 		} else if ("DT".equals(hl7Datatype)) {
 			DT value = (DT) obx5;
-			Date valueDate = getDate(value.getYear(), value.getMonth(), value.getDay(), 0, 0, 0);
-			if (value == null || valueDate == null) {
+			if (value != null) {
+				Date valueDate = getDate(value.getYear(), value.getMonth(), value.getDay(), 0, 0, 0);
+				if (valueDate != null) {
+					obs.setValueDatetime(valueDate);
+				} else {
+					log.warn("Not creating null valued obs for concept " + concept);
+					return null;
+				}
+			} else {
 				log.warn("Not creating null valued obs for concept " + concept);
 				return null;
 			}
-			obs.setValueDatetime(valueDate);
 		} else if ("TS".equals(hl7Datatype)) {
 			DTM value = ((TS) obx5).getTime();
-			Date valueDate = getDate(value.getYear(), value.getMonth(), value.getDay(), value.getHour(), value.getMinute(),
-			    value.getSecond());
-			if (value == null || valueDate == null) {
+			if (value != null) {
+				Date valueDate = getDate(value.getYear(), value.getMonth(), value.getDay(), value.getHour(), value
+				        .getMinute(), value.getSecond());
+				if (valueDate != null) {
+					obs.setValueDatetime(valueDate);
+				} else {
+					log.warn("Not creating null valued obs for concept " + concept);
+					return null;
+				}
+			} else {
 				log.warn("Not creating null valued obs for concept " + concept);
 				return null;
 			}
-			obs.setValueDatetime(valueDate);
 		} else if ("TM".equals(hl7Datatype)) {
 			TM value = (TM) obx5;
-			Date valueTime = getDate(0, 0, 0, value.getHour(), value.getMinute(), value.getSecond());
-			if (value == null || valueTime == null) {
+			if (value != null) {
+				Date valueTime = getDate(0, 0, 0, value.getHour(), value.getMinute(), value.getSecond());
+				if (valueTime != null) {
+					obs.setValueDatetime(valueTime);
+				} else {
+					log.warn("Not creating null valued obs for concept " + concept);
+					return null;
+				}
+			} else {
 				log.warn("Not creating null valued obs for concept " + concept);
 				return null;
 			}
-			obs.setValueDatetime(valueTime);
 		} else if ("ST".equals(hl7Datatype)) {
 			ST value = (ST) obx5;
 			if (value == null || value.getValue() == null || value.getValue().trim().length() == 0) {
@@ -775,6 +801,22 @@ public class ORUR01Handler implements Application {
 				return null;
 			}
 			obs.setValueText(value.getValue());
+		} else if ("ED".equals(hl7Datatype)) {
+			ED value = (ED) obx5;
+			if (value == null || value.getData() == null || !StringUtils.hasText(value.getData().getValue())) {
+				log.warn("Not creating null valued obs for concept " + concept);
+				return null;
+			}
+			//we need to hydrate the concept so that the EncounterSaveHandler
+			//doesn't fail since it needs to check if it is a concept numeric
+			Concept c = Context.getConceptService().getConcept(obs.getConcept().getConceptId());
+			obs.setConcept(c);
+			String title = null;
+			if (obs.getValueCodedName() != null)
+				title = obs.getValueCodedName().getName();
+			if (!StringUtils.hasText(title))
+				title = c.getName().getName();
+			obs.setComplexData(new ComplexData(title, value.getData().getValue()));
 		} else {
 			// unsupported data type
 			// TODO: support RP (report), SN (structured numeric)
@@ -916,19 +958,14 @@ public class ORUR01Handler implements Application {
 			// the concept is local
 			try {
 				Integer conceptId = new Integer(hl7ConceptId);
-				Concept concept = new Concept(conceptId);
-				return concept;
+				return Context.getConceptService().getConcept(conceptId);
 			}
 			catch (NumberFormatException e) {
 				throw new HL7Exception("Invalid concept ID '" + hl7ConceptId + "' in hl7 message with uid: " + uid);
 			}
 		} else {
 			// the concept is not local, look it up in our mapping
-			Concept concept = Context.getConceptService().getConceptByMapping(hl7ConceptId, codingSystem);
-			if (concept == null)
-				log.error("Unable to find concept with code: " + hl7ConceptId + " and mapping: " + codingSystem
-				        + " in hl7 message with uid: " + uid);
-			return concept;
+			return Context.getConceptService().getConceptByMapping(hl7ConceptId, codingSystem);
 		}
 	}
 	
@@ -1041,9 +1078,8 @@ public class ORUR01Handler implements Application {
 		Integer patientId = Context.getHL7Service().resolvePatientId(pid);
 		if (patientId == null)
 			throw new HL7Exception("Could not resolve patient");
-		Patient patient = new Patient();
-		patient.setPatientId(patientId);
-		return patient;
+		
+		return Context.getPatientService().getPatient(patientId);
 	}
 	
 	/**
@@ -1066,19 +1102,16 @@ public class ORUR01Handler implements Application {
 		Integer locationId = Context.getHL7Service().resolveLocationId(hl7Location);
 		if (locationId == null)
 			throw new HL7Exception("Could not resolve location");
-		Location location = new Location();
-		location.setLocationId(locationId);
-		return location;
+		
+		return Context.getLocationService().getLocation(locationId);
 	}
 	
 	/**
-	 * needs to find a Form based on information in MSH-21.
-	 * 
-	 * example: 16^AMRS.ELD.FORMID
+	 * needs to find a Form based on information in MSH-21. example: 16^AMRS.ELD.FORMID
 	 * 
 	 * @param msh
 	 * @return
-	 * @throws HL7Exception 
+	 * @throws HL7Exception
 	 */
 	private Form getForm(MSH msh) throws HL7Exception {
 		String uuid = null;

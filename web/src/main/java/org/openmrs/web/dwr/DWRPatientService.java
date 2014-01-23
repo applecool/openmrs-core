@@ -86,6 +86,10 @@ public class DWRPatientService implements GlobalPropertyListener {
 		return findBatchOfPatients(searchValue, includeVoided, null, null);
 	}
 	
+	public static void setMaximumResults(Integer maximumResults) {
+		DWRPatientService.maximumResults = maximumResults;
+	}
+	
 	/**
 	 * Search on the <code>searchValue</code>. If a number is in the search string, do an identifier
 	 * search. Else, do a name search
@@ -100,7 +104,7 @@ public class DWRPatientService implements GlobalPropertyListener {
 	 */
 	public Collection<Object> findBatchOfPatients(String searchValue, boolean includeVoided, Integer start, Integer length) {
 		if (maximumResults == null)
-			maximumResults = getMaximumSearchResults();
+			setMaximumResults(getMaximumSearchResults());
 		if (length != null && length > maximumResults)
 			length = maximumResults;
 		
@@ -176,6 +180,7 @@ public class DWRPatientService implements GlobalPropertyListener {
 	 * @should signal for a new search if the new search value has matches and is a first call
 	 * @should not signal for a new search if it is not the first ajax call
 	 * @should not signal for a new search if the new search value has no matches
+	 * @should match patient with identifiers that contain no digit
 	 */
 	public Map<String, Object> findCountAndPatients(String searchValue, Integer start, Integer length, boolean getMatchCount)
 	        throws APIException {
@@ -256,7 +261,7 @@ public class DWRPatientService implements GlobalPropertyListener {
 					//ensure that count never exceeds this value because the API's service layer would never
 					//return more than it since it is limited in the DAO layer
 					if (maximumResults == null)
-						maximumResults = getMaximumSearchResults();
+						setMaximumResults(getMaximumSearchResults());
 					if (length != null && length > maximumResults)
 						length = maximumResults;
 					
@@ -739,16 +744,16 @@ public class DWRPatientService implements GlobalPropertyListener {
 	@Override
 	public void globalPropertyChanged(GlobalProperty newValue) {
 		try {
-			maximumResults = Integer.valueOf(newValue.getPropertyValue());
+			setMaximumResults(Integer.valueOf(newValue.getPropertyValue()));
 		}
 		catch (NumberFormatException e) {
-			maximumResults = OpenmrsConstants.GLOBAL_PROPERTY_PERSON_SEARCH_MAX_RESULTS_DEFAULT_VALUE;
+			setMaximumResults(OpenmrsConstants.GLOBAL_PROPERTY_PERSON_SEARCH_MAX_RESULTS_DEFAULT_VALUE);
 		}
 	}
 	
 	@Override
 	public void globalPropertyDeleted(String propertyName) {
-		maximumResults = OpenmrsConstants.GLOBAL_PROPERTY_PERSON_SEARCH_MAX_RESULTS_DEFAULT_VALUE;
+		setMaximumResults(OpenmrsConstants.GLOBAL_PROPERTY_PERSON_SEARCH_MAX_RESULTS_DEFAULT_VALUE);
 	}
 	
 	/**

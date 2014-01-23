@@ -111,10 +111,10 @@ $j(document).ready( function() {
 </c:if>
 
 <spring:hasBindErrors name="conceptReferenceTermModel">
-	<openmrs:message code="fix.error"/>
+	<openmrs:message htmlEscape="false" code="fix.error"/>
 	<div class="error">
 		<c:forEach items="${errors.allErrors}" var="error">
-			<openmrs:message code="${error.code}" text="${error.code}"/>- ${error.objectName}<br/>
+			<openmrs:message code="${error.code}" text="${error.code}"/><br/>
 		</c:forEach>
 	</div>
 	<br />
@@ -133,7 +133,7 @@ $j(document).ready( function() {
             <th class="alignRight" valign="top"><openmrs:message code="ConceptReferenceTerm.code"/><span class="required">*</span></th>
             <td valign="top">
                 <spring:bind path="code">
-                    <input type="text" name="${status.expression}" value="${status.value}"/>
+                    <input type="text" name="${status.expression}" value="<c:out value="${status.value}" />"/>
                     <c:if test="${status.errorMessage != ''}"><span class="error">${status.errorMessage}</span></c:if>
                 </spring:bind>
             </td>
@@ -142,7 +142,7 @@ $j(document).ready( function() {
             <th class="alignRight" valign="top"><openmrs:message code="general.name"/></th>
             <td valign="top">
                 <spring:bind path="name">
-                    <input type="text" name="${status.expression}" value="${status.value}"/>
+                    <input type="text" name="${status.expression}" value="<c:out value="${status.value}" />"/>
                     <c:if test="${status.errorMessage != ''}"><span class="error">${status.errorMessage}</span></c:if>
                 </spring:bind>
             </td>
@@ -155,7 +155,7 @@ $j(document).ready( function() {
 					<option value=""></option>
 					<openmrs:forEachRecord name="conceptSource">
 					<option value="${record.conceptSourceId}" <c:if test="${record.conceptSourceId == status.value}">selected="selected"</c:if>>
-						${record.name}  <c:if test="${not empty record.hl7Code}">[${record.hl7Code}]</c:if>
+						<c:out value="${record.name}" />  <c:if test="${not empty record.hl7Code}">[${record.hl7Code}]</c:if>
 					</option>
 					</openmrs:forEachRecord>
 				</select>
@@ -167,7 +167,7 @@ $j(document).ready( function() {
        		<th class="alignRight" valign="top"><openmrs:message code="general.description"/></th>
             <td valign="top">
                 <spring:bind path="description">
-                	<textarea name="${status.expression}" rows="3" cols="50">${status.value}</textarea>
+                	<textarea name="${status.expression}" rows="3" cols="50"><c:out value="${status.value}" /></textarea>
                     <c:if test="${status.errorMessage != ''}"><span class="error">${status.errorMessage}</span></c:if>
                 </spring:bind>
             </td>
@@ -176,7 +176,7 @@ $j(document).ready( function() {
             <th class="alignRight"><openmrs:message code="general.version"/></th>
             <td>
                 <spring:bind path="version">
-                    <input type="text" name="${status.expression}" value="${status.value}"/>
+                    <input type="text" name="${status.expression}" value="<c:out value="${status.value}" />"/>
                     <c:if test="${status.errorMessage != ''}"><span class="error">${status.errorMessage}</span></c:if>
                 </spring:bind>
             </td>
@@ -199,12 +199,20 @@ $j(document).ready( function() {
 				<tr <c:if test="${mapStatus.index % 2 == 0}">class='evenRow'</c:if>>
 					<td>
 						<spring:bind path="conceptMapType">
+							<c:set var="groupOpen" value="false" />
 							<select name="${status.expression}">
 							<openmrs:forEachRecord name="conceptMapType">
+								<c:if test="${record.retired && !groupOpen}">
+									<optgroup label="<openmrs:message code="Encounter.type.retired"/>">
+									<c:set var="groupOpen" value="true" />
+								</c:if>
 								<option value="${record.conceptMapTypeId}" <c:if test="${record.conceptMapTypeId == status.value}">selected="selected"</c:if> >
-									${record.name}
+									<c:out value="${record.name}" />
 								</option>
 							</openmrs:forEachRecord>
+							<c:if test="${groupOpen}">
+								</optgroup>
+							</c:if>
 							</select>
 						</spring:bind>
 					</td>
@@ -220,7 +228,7 @@ $j(document).ready( function() {
 							<option value=""><openmrs:message code="ConceptReferenceTerm.searchAllSources" /></option>
 							<openmrs:forEachRecord name="conceptSource">
 							<option value="${record.conceptSourceId}" <c:if test="${record.conceptSourceId == map.termB.conceptSource.conceptSourceId}">selected="selected"</c:if>>
-								${record.name}
+								<c:out value="${record.name}" />
 							</option>
 							</openmrs:forEachRecord>
 						</select>
@@ -247,21 +255,29 @@ $j(document).ready( function() {
 				
 				<%-- The row from which to clone new reference term maps --%>
 				<tr id="newTermMapRow" style="display: none">
-					<td>						
+					<td>
+						<c:set var="groupOpen" value="false" />
 						<select name="conceptMapType">
 							<openmrs:forEachRecord  name="conceptMapType">
+							<c:if test="${record.retired && !groupOpen}">
+								<optgroup label="<openmrs:message code="Encounter.type.retired"/>">
+								<c:set var="groupOpen" value="true" />
+							</c:if>
 								<option value="${record.conceptMapTypeId}">
-									${record.name}
+                                    <c:out value="${record.name}" />
 								</option>
 							</openmrs:forEachRecord>
-						</select>						
+							<c:if test="${groupOpen}">
+								</optgroup>
+							</c:if>
+						</select>
 					</td>
 					<td>
 						<select id="map.source" name="term.source" >
 							<option value=""><openmrs:message code="ConceptReferenceTerm.searchAllSources" /></option>
 							<openmrs:forEachRecord  name="conceptSource">
 							<option value="${record.conceptSourceId}">
-								${record.name}
+                                <c:out value="${record.name}" />
 							</option>
 							</openmrs:forEachRecord>
 						</select>
@@ -306,7 +322,7 @@ $j(document).ready( function() {
 		<tr>
 			<th class="alignRight"><openmrs:message code="general.createdBy" /></th>
 			<td>
-				${conceptReferenceTermModel.conceptReferenceTerm.creator.personName} -
+				<c:out value="${conceptReferenceTermModel.conceptReferenceTerm.creator.personName}" /> -
 				<openmrs:formatDate date="${conceptReferenceTermModel.conceptReferenceTerm.dateCreated}" type="long" />
 			</td>
 		</tr>
@@ -315,7 +331,7 @@ $j(document).ready( function() {
 		<tr>
 			<th class="alignRight"><openmrs:message code="general.changedBy" /></th>
 			<td>
-				${conceptReferenceTermModel.conceptReferenceTerm.changedBy.personName} -
+				<c:out value="${conceptReferenceTermModel.conceptReferenceTerm.changedBy.personName}" /> -
 				<openmrs:formatDate date="${conceptReferenceTermModel.conceptReferenceTerm.dateChanged}" type="long" />
 			</td>
 		</tr>
@@ -324,7 +340,7 @@ $j(document).ready( function() {
 		<tr>
 			<th class="alignRight"><openmrs:message code="general.retiredBy" /></th>
 			<td>
-				${conceptReferenceTermModel.conceptReferenceTerm.retiredBy.personName} -
+				<c:out value="${conceptReferenceTermModel.conceptReferenceTerm.retiredBy.personName}" /> -
 				<openmrs:formatDate date="${conceptReferenceTermModel.conceptReferenceTerm.dateRetired}" type="long" />
 			</td>
 		</tr>

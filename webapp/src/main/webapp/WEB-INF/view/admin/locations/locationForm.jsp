@@ -14,7 +14,7 @@
 		<div class="retiredMessage">
 			<div>
 				<openmrs:message code="general.retiredBy"/>
-				${location.retiredBy.personName}
+				<c:out value="${location.retiredBy.personName}" />
 				<openmrs:formatDate date="${location.dateRetired}" type="medium" />
 				-
 				${location.retireReason}
@@ -25,7 +25,7 @@
 </c:if>
 
 <spring:hasBindErrors name="location">
-	<openmrs:message code="fix.error"/>
+	<openmrs:message htmlEscape="false" code="fix.error"/>
 	<div class="error">
 		<c:forEach items="${errors.globalErrors}" var="error">
 			<openmrs:message code="${error.defaultMessage}" text="${error.defaultMessage}"/><br/><!-- ${error} -->
@@ -55,7 +55,7 @@
 			</td>
 		</tr>
 		<spring:nestedPath path="location">
-			<openmrs:portlet url="addressLayout" id="addressPortlet" size="full" parameters="layoutShowTable=false|layoutShowExtended=false|layoutShowErrors=false" />
+			<openmrs:portlet url="addressLayout" id="addressPortlet" size="full" parameters="layoutShowTable=false|layoutShowExtended=false|layoutShowErrors=false|isNew=${location.locationId == null}" />
 		</spring:nestedPath>
 		<tr>
 			<th valign="top"><openmrs:message code="Location.parentLocation"/></th>
@@ -89,8 +89,12 @@
 				<spring:bind path="location.tags">
 					<input type="hidden" name="_tags"/>
 					<c:forEach var="t" items="${locationTags}">
-						<input type="checkbox" name="tags" value="${t.id}" <c:if test="${openmrs:collectionContains(status.value, t)}">checked="true"</c:if>/>
-						<openmrs:format locationTag="${t}"/>
+                        <c:if test="${openmrs:collectionContains(status.value, t) || !t.retired}">
+                            <span <c:if test="${t.retired}">class="retired"</c:if>>
+                                <input type="checkbox" name="tags" value="${t.id}" <c:if test="${openmrs:collectionContains(status.value, t)}">checked="true"</c:if>/>
+                                <openmrs:format locationTag="${t}"/>
+                            </span>
+                        </c:if>
 					</c:forEach>
 					<c:if test="${status.errorMessage != ''}"><span class="error">${status.errorMessage}</span></c:if>
 				</spring:bind>
@@ -100,7 +104,7 @@
 			<tr>
 				<th><openmrs:message code="general.createdBy" /></th>
 				<td colspan="5">
-					${location.creator.personName} -
+					<c:out value="${location.creator.personName}" /> -
 					<openmrs:formatDate date="${location.dateCreated}" type="long" />
 				</td>
 			</tr>

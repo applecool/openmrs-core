@@ -17,20 +17,12 @@
 	
 </script>
 
-<script type="text/javascript">
-   function forceMaxLength(object, maxLength) {
-      if( object.value.length >= maxLength) {
-         object.value = object.value.substring(0, maxLength); 
-      }
-   }
-</script>
-
 <h2><openmrs:message code="EncounterType.title"/></h2>
 
 <openmrs:extensionPoint pointId="org.openmrs.admin.encounters.encounterForm.belowTitle" type="html" parameters="encounterTypeId=${encounterType.encounterTypeId}" />
 
 <spring:hasBindErrors name="encounterType">
-	<openmrs:message code="fix.error"/>
+	<openmrs:message htmlEscape="false" code="fix.error"/>
 	<br />
 </spring:hasBindErrors>
 <form method="post">
@@ -88,7 +80,7 @@
 		<tr>
 			<td><openmrs:message code="general.createdBy" /></td>
 			<td>
-				${encounterType.creator.personName} -
+				<c:out value="${encounterType.creator.personName}" /> -
 				<openmrs:formatDate date="${encounterType.dateCreated}" type="long" />
 			</td>
 		</tr>
@@ -98,8 +90,14 @@
 
 <openmrs:extensionPoint pointId="org.openmrs.admin.encounters.encounterForm.inForm" type="html" parameters="encounterTypeId=${encounterType.encounterTypeId}" />
 
-<input type="submit" value="<openmrs:message code="EncounterType.save"/>" name="save">
+<openmrs:globalProperty key="EncounterType.encounterTypes.locked" var="encounterTypesLocked"/>
 
+<c:if test="${encounterTypesLocked != 'true'}">
+<input type="submit" value="<openmrs:message code="EncounterType.save"/>" name="save">
+</c:if>
+<c:if test="${encounterTypesLocked == 'true'}">
+<input type="submit" value="<openmrs:message code="EncounterType.save"/>" name="save" disabled>
+</c:if>
 </fieldset>
 </form>
 
@@ -118,7 +116,12 @@
 				</c:forEach>
 			</spring:hasBindErrors>
 			<br/>
+			<c:if test="${encounterTypesLocked != 'true'}">
 			<input type="submit" value='<openmrs:message code="EncounterType.retireEncounterType"/>' name="retire"/>
+			</c:if>
+			<c:if test="${encounterTypesLocked == 'true'}">
+			<input type="submit" value='<openmrs:message code="EncounterType.retireEncounterType"/>' name="retire" disabled/>
+			</c:if>
 		</fieldset>
 	</form>
 </c:if>
@@ -129,7 +132,12 @@
 			<h4><openmrs:message code="EncounterType.unretireEncounterType"/></h4>
 			
 			<br/>
+			<c:if test="${encounterTypesLocked != 'true'}">
 			<input type="submit" value='<openmrs:message code="EncounterType.unretireEncounterType"/>' name="unretire"/>
+			</c:if>
+			<c:if test="${encounterTypesLocked == 'true'}">
+			<input type="submit" value='<openmrs:message code="EncounterType.unretireEncounterType"/>' name="unretire" disabled/>
+			</c:if>
 		</fieldset>
 	</form>
 </c:if>
@@ -141,7 +149,12 @@
 		<form id="purge" method="post" onsubmit="return confirmPurge()">
 			<fieldset>
 				<h4><openmrs:message code="EncounterType.purgeEncounterType"/></h4>
+				<c:if test="${encounterTypesLocked != 'true'}">
 				<input type="submit" value='<openmrs:message code="EncounterType.purgeEncounterType"/>' name="purge" />
+				</c:if>
+				<c:if test="${encounterTypesLocked == 'true'}">
+				<input type="submit" value='<openmrs:message code="EncounterType.purgeEncounterType"/>' name="purge" disabled />
+				</c:if>
 			</fieldset>
 		</form>
 	</openmrs:hasPrivilege>

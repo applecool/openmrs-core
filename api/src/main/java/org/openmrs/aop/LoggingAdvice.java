@@ -13,18 +13,18 @@
  */
 package org.openmrs.aop;
 
-import java.lang.reflect.Method;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
-
 import org.aopalliance.intercept.MethodInterceptor;
 import org.aopalliance.intercept.MethodInvocation;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.openmrs.User;
 import org.openmrs.annotation.Logging;
+import org.openmrs.api.context.Context;
 import org.openmrs.util.OpenmrsUtil;
-import org.springframework.util.StringUtils;
+
+import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * This class provides the log4j aop around advice for our service layer. This advice is placed on
@@ -121,10 +121,22 @@ public class LoggingAdvice implements MethodInterceptor {
 			// do the actual method we're wrapped around
 			return invocation.proceed();
 		}
-		catch (Throwable t) {
-			if (logGetter || logSetter)
-				log.error("An error occurred while executing this method. Error message: " + t.getMessage(), t);
-			throw t;
+		catch (Exception e) {
+			if (logGetter || logSetter) {
+				String username;
+				User user = Context.getAuthenticatedUser();
+				if (user == null) {
+					username = "Guest (Not logged in)";
+				} else {
+					username = user.getUsername();
+					if (username == null || username.length() == 0)
+						username = user.getSystemId();
+				}
+				log.error(String.format(
+				    "An error occurred while executing this method.\nCurrent user: %s\nError message: %s", username, e
+				            .getMessage()), e);
+			}
+			throw e;
 		}
 		finally {
 			if (logGetter || logSetter) {

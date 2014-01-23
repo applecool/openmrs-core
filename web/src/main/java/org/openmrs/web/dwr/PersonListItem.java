@@ -25,6 +25,7 @@ import org.openmrs.Person;
 import org.openmrs.PersonAttribute;
 import org.openmrs.PersonName;
 import org.openmrs.util.Format;
+import org.openmrs.web.WebUtil;
 
 /**
  * A mini/simplified Person object. Used as the return object from DWR methods to allow javascript
@@ -59,6 +60,8 @@ public class PersonListItem {
 	private Boolean birthdateEstimated = false;
 	
 	private String deathDateString;
+	
+	private Boolean deathdateEstimated = false;
 	
 	private Integer age;
 	
@@ -133,14 +136,15 @@ public class PersonListItem {
 			
 			gender = person.getGender();
 			birthdate = person.getBirthdate();
-			birthdateString = Format.format(person.getBirthdate());
+			birthdateString = WebUtil.formatDate(person.getBirthdate());
 			birthdateEstimated = person.isBirthdateEstimated();
 			age = person.getAge();
 			voided = person.isPersonVoided();
 			
 			if (person.getDeathDate() != null) {
-				this.deathDateString = Format.format(person.getDeathDate());
+				this.deathDateString = WebUtil.formatDate(person.getDeathDate());
 			}
+			deathdateEstimated = person.getDeathdateEstimated();
 			
 			// add in the person attributes
 			for (PersonAttribute attribute : person.getActiveAttributes()) {
@@ -264,6 +268,14 @@ public class PersonListItem {
 	
 	public void setDeathDateString(String deathDateString) {
 		this.deathDateString = deathDateString;
+	}
+	
+	public Boolean getDeathdateEstimated() {
+		return deathdateEstimated;
+	}
+	
+	public void setDeathdateEstimated(Boolean deathdateEstimated) {
+		this.deathdateEstimated = deathdateEstimated;
 	}
 	
 	public String getFamilyName() {

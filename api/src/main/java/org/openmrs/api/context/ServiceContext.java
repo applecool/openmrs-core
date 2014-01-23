@@ -53,12 +53,14 @@ import org.openmrs.logic.LogicService;
 import org.openmrs.messagesource.MessageSourceService;
 import org.openmrs.notification.AlertService;
 import org.openmrs.notification.MessageService;
+import org.openmrs.notification.NoteService;
 import org.openmrs.reporting.ReportObjectService;
 import org.openmrs.scheduler.SchedulerService;
 import org.openmrs.util.OpenmrsClassLoader;
 import org.springframework.aop.Advisor;
 import org.springframework.aop.framework.Advised;
 import org.springframework.aop.framework.ProxyFactory;
+import org.springframework.beans.BeansException;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationContextAware;
 
@@ -200,6 +202,13 @@ public class ServiceContext implements ApplicationContextAware {
 	 */
 	public ObsService getObsService() {
 		return getService(ObsService.class);
+	}
+	
+	/**
+	 * @return note service
+	 */
+	public NoteService getNoteService() {
+		return getService(NoteService.class);
 	}
 	
 	/**
@@ -404,6 +413,13 @@ public class ServiceContext implements ApplicationContextAware {
 	 */
 	public void setObsService(ObsService obsService) {
 		setService(ObsService.class, obsService);
+	}
+	
+	/**
+	 * @param noteService the noteService to set
+	 */
+	public void setNoteService(NoteService noteService) {
+		setService(NoteService.class, noteService);
 	}
 	
 	/**
@@ -816,7 +832,10 @@ public class ServiceContext implements ApplicationContextAware {
 					if (log.isDebugEnabled()) {
 						log.debug("cls2 classloader: " + cls.getClass().getClassLoader() + " uid: "
 						        + cls.getClass().getClassLoader().hashCode());
-						log.debug("cls==cls2: " + String.valueOf(cls == cls));
+						//pay attention that here, cls = Class.forName(classString), the system class loader and
+						//cls2 is the openmrs class loader, like above.
+						log.debug("cls==cls2: "
+						        + String.valueOf(cls == OpenmrsClassLoader.getInstance().loadClass(classString)));
 					}
 				}
 				catch (Exception e) { /*pass*/}
@@ -856,6 +875,10 @@ public class ServiceContext implements ApplicationContextAware {
 		return useSystemClassLoader;
 	}
 	
+	public static void setRefreshingContext(boolean refreshingContext) {
+		ServiceContext.refreshingContext = refreshingContext;
+	}
+	
 	/**
 	 * Should be called <b>right before</b> any spring context refresh This forces all calls to
 	 * getService to wait until <code>doneRefreshingContext</code> is called
@@ -863,7 +886,7 @@ public class ServiceContext implements ApplicationContextAware {
 	public void startRefreshingContext() {
 		synchronized (refreshingContextLock) {
 			log.info("Refreshing Context");
-			refreshingContext = true;
+			setRefreshingContext(true);
 		}
 	}
 	
@@ -874,7 +897,7 @@ public class ServiceContext implements ApplicationContextAware {
 	public void doneRefreshingContext() {
 		synchronized (refreshingContextLock) {
 			log.info("Done refreshing Context");
-			refreshingContext = false;
+			setRefreshingContext(false);
 			refreshingContextLock.notifyAll();
 		}
 	}
@@ -914,6 +937,24 @@ public class ServiceContext implements ApplicationContextAware {
 		if (log.isTraceEnabled())
 			log.trace("getRegisteredComponents(" + type + ") = " + m);
 		return new ArrayList<T>(m.values());
+	}
+	
+	/**
+	 * Retrieves a bean that match the given type (including subclasses) and name.
+	 * 
+	 * @param beanName the name of registered bean to retrieve
+	 * @param type the type of bean to retrieve 
+	 * @return bean of passed type
+	 * 
+	 * @since 1.9.4
+	 */
+	public <T> T getRegisteredComponent(String beanName, Class<T> type) throws APIException {
+		try {
+			return applicationContext.getBean(beanName, type);
+		}
+		catch (BeansException beanException) {
+			throw new APIException("Error during getting registered component.", beanException);
+		}
 	}
 	
 	/**

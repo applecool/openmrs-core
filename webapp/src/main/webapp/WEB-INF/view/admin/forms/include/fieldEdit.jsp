@@ -39,7 +39,7 @@
 					<c:forEach items="${fieldTypes}" var="ft">
 						<option value="${ft.fieldTypeId}"
 							<c:if test="${ft.fieldTypeId == status.value.fieldTypeId}">selected</c:if>>
-							${ft.name}
+							<c:out value="${ft.name}"/>
 						</option>
 					</c:forEach>
 				</select>
@@ -142,7 +142,7 @@
 				<openmrs:message code="general.createdBy" />
 			</td>
 			<td>
-				${field.creator.personName} -
+				<c:out value="${field.creator.personName}" /> -
 				<openmrs:formatDate date="${field.dateCreated}" type="long" />
 			</td>
 		</tr>
@@ -153,7 +153,7 @@
 				<openmrs:message code="general.changedBy" />
 			</td>
 			<td>
-				${field.changedBy.personName} -
+				<c:out value="${field.changedBy.personName}" /> -
 				<openmrs:formatDate date="${field.dateChanged}" type="long" />
 			</td>
 		</tr>

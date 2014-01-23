@@ -65,7 +65,7 @@
 	<div class="retiredMessage">
 	<div>
 	<openmrs:message code="ConceptDrug.retiredMessage"/>
-	${drug.retiredBy.personName}
+	<c:out value="${drug.retiredBy.personName}" />
 				<openmrs:formatDate date="${drug.dateRetired}" type="medium" />
 				-
 				${drug.retireReason}
@@ -77,7 +77,7 @@
 </c:if>
 
 <spring:hasBindErrors name="drug">
-	<openmrs:message code="fix.error"/>
+	<openmrs:message htmlEscape="false" code="fix.error"/>
 	<br />
 </spring:hasBindErrors>
 
@@ -92,7 +92,7 @@
 		<td>
 			<spring:bind path="drug.name">			
 				<input type="text" name="${status.expression}" size="40"
-					   value="${status.value}" />
+					   value="<c:out value="${status.value}" />" />
 				<c:if test="${status.errorMessage != ''}"><span class="error">${status.errorMessage}</span></c:if> 
 			</spring:bind>
 		</td>
@@ -131,7 +131,7 @@
 		<td>
 			<spring:bind path="drug.doseStrength">			
 				<input type="text" name="${status.expression}" size="10" 
-					   value="${status.value}" />
+					   value="<c:out value="${status.value}" />" />
 				<c:if test="${status.errorMessage != ''}"><span class="error">${status.errorMessage}</span></c:if> 
 			</spring:bind>
 		</td>
@@ -141,7 +141,7 @@
 		<td>
 			<spring:bind path="drug.units">			
 				<input type="text" name="${status.expression}" size="10" 
-					   value="${status.value}" />
+					   value="<c:out value="${status.value}" />" />
 				<c:if test="${status.errorMessage != ''}"><span class="error">${status.errorMessage}</span></c:if> 
 			</spring:bind>
 		</td>
@@ -151,7 +151,7 @@
 		<td>
 			<spring:bind path="drug.minimumDailyDose">			
 				<input type="text" name="${status.expression}" size="10" 
-					   value="${status.value}" />
+					   value="<c:out value="${status.value}" />" />
 				<c:if test="${status.errorMessage != ''}"><span class="error">${status.errorMessage}</span></c:if> 
 			</spring:bind>
 		</td>
@@ -161,7 +161,7 @@
 		<td>
 			<spring:bind path="drug.maximumDailyDose">
 				<input type="text" name="${status.expression}" size="10" 
-					   value="${status.value}" />
+					   value="<c:out value="${status.value}" />" />
 				<c:if test="${status.errorMessage != ''}"><span class="error">${status.errorMessage}</span></c:if> 
 			</spring:bind>
 		</td>
@@ -192,7 +192,7 @@
 		<tr>
 			<th><openmrs:message code="general.createdBy" /></th>
 			<td>
-				<a href="#View User" onclick="return gotoUser(null, '${drug.creator.userId}')">${drug.creator.personName}</a> -
+				<a href="#View User" onclick="return gotoUser(null, '${drug.creator.userId}')"><c:out value="${drug.creator.personName}" /></a> -
 				<openmrs:formatDate date="${drug.dateCreated}" type="medium" />
 			</td>
 		</tr>
@@ -201,7 +201,7 @@
 		<tr>
 			<th><openmrs:message code="general.changedBy" /></th>
 			<td>
-				<a href="#View User" onclick="return gotoUser(null, '${drug.changedBy.userId}')">${drug.changedBy.personName}</a> 
+				<a href="#View User" onclick="return gotoUser(null, '${drug.changedBy.userId}')"><c:out value="${drug.changedBy.personName}" /></a>
 				<openmrs:formatDate date="${drug.dateChanged}" type="medium" />
 			</td>
 		</tr>

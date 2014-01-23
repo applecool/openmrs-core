@@ -19,6 +19,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.net.URLConnection;
@@ -33,6 +35,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.WeakHashMap;
+
+import net.sf.ehcache.CacheManager;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -204,21 +208,41 @@ public class OpenmrsClassLoader extends URLClassLoader {
 	 */
 	@Override
 	public Enumeration<URL> findResources(final String name) throws IOException {
-		Set<URL> results = new HashSet<URL>();
+		Set<URI> results = new HashSet<URI>();
 		for (ModuleClassLoader classLoader : ModuleFactory.getModuleClassLoaders()) {
 			Enumeration<URL> urls = classLoader.findResources(name);
 			while (urls.hasMoreElements()) {
 				URL result = urls.nextElement();
 				if (result != null)
-					results.add(result);
+					try {
+						results.add(result.toURI());
+					}
+					catch (URISyntaxException e) {
+						throwInvalidURI(result, e);
+					}
 			}
 		}
 		
 		for (Enumeration<URL> en = super.findResources(name); en.hasMoreElements();) {
-			results.add(en.nextElement());
+			URL url = en.nextElement();
+			try {
+				results.add(url.toURI());
+			}
+			catch (URISyntaxException e) {
+				throwInvalidURI(url, e);
+			}
 		}
 		
-		return Collections.enumeration(results);
+		List<URL> resources = new ArrayList<URL>(results.size());
+		for (URI result : results) {
+			resources.add(result.toURL());
+		}
+		
+		return Collections.enumeration(resources);
+	}
+	
+	private void throwInvalidURI(URL url, Exception e) throws IOException {
+		throw new IOException(url.getPath() + " is not a valid URI", e);
 	}
 	
 	/**
@@ -244,21 +268,37 @@ public class OpenmrsClassLoader extends URLClassLoader {
 	 */
 	@Override
 	public Enumeration<URL> getResources(String packageName) throws IOException {
-		Set<URL> results = new HashSet<URL>();
+		Set<URI> results = new HashSet<URI>();
 		for (ModuleClassLoader classLoader : ModuleFactory.getModuleClassLoaders()) {
 			Enumeration<URL> urls = classLoader.getResources(packageName);
 			while (urls.hasMoreElements()) {
 				URL result = urls.nextElement();
 				if (result != null)
-					results.add(result);
+					try {
+						results.add(result.toURI());
+					}
+					catch (URISyntaxException e) {
+						throwInvalidURI(result, e);
+					}
 			}
 		}
 		
 		for (Enumeration<URL> en = super.getResources(packageName); en.hasMoreElements();) {
-			results.add(en.nextElement());
+			URL url = en.nextElement();
+			try {
+				results.add(url.toURI());
+			}
+			catch (URISyntaxException e) {
+				throwInvalidURI(url, e);
+			}
 		}
 		
-		return Collections.enumeration(results);
+		List<URL> resources = new ArrayList<URL>(results.size());
+		for (URI result : results) {
+			resources.add(result.toURL());
+		}
+		
+		return Collections.enumeration(resources);
 	}
 	
 	/**
@@ -303,7 +343,60 @@ public class OpenmrsClassLoader extends URLClassLoader {
 		//			}
 		//		}
 		
+		//Shut down and remove all cache managers.
+		List<CacheManager> knownCacheManagers = CacheManager.ALL_CACHE_MANAGERS;
+		while (!knownCacheManagers.isEmpty()) {
+			CacheManager cacheManager = CacheManager.ALL_CACHE_MANAGERS.get(0);
+			try {
+				//This shuts down and removes the cache manager.
+				cacheManager.shutdown();
+				
+				//Just in case the the timer does not stop, set the cacheManager 
+				//timer to null because it references this class loader.
+				Field field = cacheManager.getClass().getDeclaredField("cacheManagerTimer");
+				field.setAccessible(true);
+				field.set(cacheManager, null);
+			}
+			catch (Throwable ex) {
+				log.error(ex.getMessage(), ex);
+			}
+		}
+		
+		MemoryLeakUtil.clearHibernateSessionFactories();
+		
+		OpenmrsClassScanner.destroyInstance();
+		
 		OpenmrsClassLoaderHolder.INSTANCE = null;
+	}
+	
+	/**
+	 * Sets the class loader, for all threads referencing a destroyed openmrs class loader, 
+	 * to the current one.
+	 */
+	public static void setThreadsToNewClassLoader() {
+		//Give ownership of all threads loaded by the old class loader to the new one.
+		//Examples of such threads are: Keep-Alive-Timer, MySQL Statement Cancellation Timer, etc
+		//That way they will no longer hold onto the destroyed OpenmrsClassLoader and hence
+		//allow it to be garbage collected after a spring application context refresh, when a new one is created.
+		Set<Thread> threadSet = Thread.getAllStackTraces().keySet();
+		Thread[] threadArray = threadSet.toArray(new Thread[threadSet.size()]);
+		for (Thread thread : threadArray) {
+			
+			ClassLoader classLoader = thread.getContextClassLoader();
+			
+			//Some threads have a null class loader reference. e.g Finalizer, Reference Handler, etc
+			if (classLoader == null)
+				continue;
+			
+			//Threads referencing the current class loader are good.
+			if (classLoader == getInstance())
+				continue;
+			
+			//For threads referencing any destroyed class loader, point them to the new one.
+			if (classLoader instanceof OpenmrsClassLoader) {
+				thread.setContextClassLoader(getInstance());
+			}
+		}
 	}
 	
 	// List all threads and recursively list all subgroup
@@ -342,6 +435,37 @@ public class OpenmrsClassLoader extends URLClassLoader {
 	}
 	
 	public static void onShutdown() {
+		
+		//Since we are shutting down, stop all threads that reference the openmrs class loader.
+		Set<Thread> threadSet = Thread.getAllStackTraces().keySet();
+		Thread[] threadArray = threadSet.toArray(new Thread[threadSet.size()]);
+		for (Thread thread : threadArray) {
+			
+			ClassLoader classLoader = thread.getContextClassLoader();
+			
+			//Threads like Finalizer, Reference Handler, etc have null class loader reference.
+			if (classLoader == null)
+				continue;
+			
+			if (classLoader instanceof OpenmrsClassLoader) {
+				try {
+					//Set to WebappClassLoader just in case stopping fails.
+					thread.setContextClassLoader(classLoader.getParent());
+					
+					//Stopping the current thread will halt all current cleanup.
+					//So do not ever ever even attempt stopping it. :)
+					if (thread == Thread.currentThread())
+						continue;
+					
+					log.info("onShutdown Stopping thread: " + thread.getName());
+					thread.stop();
+				}
+				catch (Throwable ex) {
+					log.error(ex.getMessage(), ex);
+				}
+			}
+		}
+		
 		clearReferences();
 	}
 	
@@ -400,18 +524,18 @@ public class OpenmrsClassLoader extends URLClassLoader {
 									}
 								}
 							}
-							catch (Throwable t) {
+							catch (Exception e) {
 								if (log.isDebugEnabled()) {
 									log.debug("Could not set field " + field.getName() + " to null in class "
-									        + clazz.getName(), t);
+									        + clazz.getName(), e);
 								}
 							}
 						}
 					}
 				}
-				catch (Throwable t) {
+				catch (Exception e) {
 					if (log.isDebugEnabled()) {
-						log.debug("Could not clean fields for class " + clazz.getName(), t);
+						log.debug("Could not clean fields for class " + clazz.getName(), e);
 					}
 				}
 			}
@@ -466,10 +590,10 @@ public class OpenmrsClassLoader extends URLClassLoader {
 					}
 				}
 			}
-			catch (Throwable t) {
+			catch (Exception e) {
 				if (log.isDebugEnabled()) {
 					log.debug("Could not set field " + field.getName() + " to null in object instance of class "
-					        + instance.getClass().getName(), t);
+					        + instance.getClass().getName(), e);
 				}
 			}
 		}
@@ -505,7 +629,7 @@ public class OpenmrsClassLoader extends URLClassLoader {
 			if (!Context.isRefreshingContext())
 				mementos.put(key, Context.getSchedulerService().saveToMemento());
 		}
-		catch (Throwable t) {
+		catch (Exception e) {
 			// pass
 		}
 		

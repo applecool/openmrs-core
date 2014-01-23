@@ -30,6 +30,7 @@ import java.util.Collections;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -754,13 +755,14 @@ public class ModuleUtil {
 	public static AbstractRefreshableApplicationContext refreshApplicationContext(AbstractRefreshableApplicationContext ctx,
 	        boolean isOpenmrsStartup, Module startedModule) {
 		//notify all started modules that we are about to refresh the context
-		for (Module module : ModuleFactory.getStartedModules()) {
+		Set<Module> startedModules = new LinkedHashSet<Module>(ModuleFactory.getStartedModulesInOrder());
+		for (Module module : startedModules) {
 			try {
 				if (module.getModuleActivator() != null)
 					module.getModuleActivator().willRefreshContext();
 			}
-			catch (Throwable t) {
-				log.warn("Unable to call willRefreshContext() method in the module's activator", t);
+			catch (Exception e) {
+				log.warn("Unable to call willRefreshContext() method in the module's activator", e);
 			}
 		}
 		
@@ -793,9 +795,11 @@ public class ModuleUtil {
 		
 		OpenmrsClassLoader.restoreState();
 		
+		OpenmrsClassLoader.setThreadsToNewClassLoader();
+		
 		// reload the advice points that were lost when refreshing Spring
 		if (log.isDebugEnabled())
-			log.debug("Reloading advice for all started modules: " + ModuleFactory.getStartedModules().size());
+			log.debug("Reloading advice for all started modules: " + startedModules.size());
 		
 		try {
 			//The call backs in this block may need lazy loading of objects
@@ -803,25 +807,34 @@ public class ModuleUtil {
 			//was closed when the application context was refreshed as above.
 			//So we need to open another session now. TRUNK-3739
 			Context.openSessionWithCurrentUser();
-			
-			for (Module module : ModuleFactory.getStartedModules()) {
+			for (Module module : startedModules) {
+				if (!module.isStarted()) {
+					continue;
+				}
+				
 				ModuleFactory.loadAdvice(module);
 				try {
 					ModuleFactory.passDaemonToken(module);
 					
 					if (module.getModuleActivator() != null) {
 						module.getModuleActivator().contextRefreshed();
-						//if it is system start up, call the started method for all started modules
-						if (isOpenmrsStartup)
-							module.getModuleActivator().started();
-						//if refreshing the context after a user started or uploaded a new module
-						else if (!isOpenmrsStartup && module.equals(startedModule))
-							module.getModuleActivator().started();
+						try {
+							//if it is system start up, call the started method for all started modules
+							if (isOpenmrsStartup)
+								module.getModuleActivator().started();
+							//if refreshing the context after a user started or uploaded a new module
+							else if (!isOpenmrsStartup && module.equals(startedModule))
+								module.getModuleActivator().started();
+						}
+						catch (Exception e) {
+							log.warn("Unable to invoke started() method on the module's activator", e);
+							ModuleFactory.stopModule(module, true, true);
+						}
 					}
 					
 				}
-				catch (Throwable t) {
-					log.warn("Unable to invoke method on the module's activator ", t);
+				catch (Exception e) {
+					log.warn("Unable to invoke method on the module's activator ", e);
 				}
 			}
 		}
@@ -921,8 +934,8 @@ public class ModuleUtil {
 				}
 			}
 		}
-		catch (Throwable t) {
-			log.warn("Unable to get the mandatory module list", t);
+		catch (Exception e) {
+			log.warn("Unable to get the mandatory module list", e);
 		}
 		
 		return mandatoryModuleIds;

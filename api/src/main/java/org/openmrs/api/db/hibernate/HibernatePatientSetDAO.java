@@ -47,7 +47,6 @@ import org.hibernate.Criteria;
 import org.hibernate.FetchMode;
 import org.hibernate.Query;
 import org.hibernate.SessionFactory;
-import org.hibernate.criterion.Expression;
 import org.hibernate.criterion.ProjectionList;
 import org.hibernate.criterion.Projections;
 import org.hibernate.criterion.Restrictions;
@@ -213,6 +212,7 @@ public class HibernatePatientSetDAO implements PatientSetDAO {
 	 * 
 	 * @deprecated
 	 */
+	@Deprecated
 	public String exportXml(Integer patientId) throws DAOException {
 		Locale locale = Context.getLocale();
 		
@@ -286,6 +286,8 @@ public class HibernatePatientSetDAO implements PatientSetDAO {
 			if (p.getBirthplace() != null) {
 				patientNode.setAttribute("birthplace", p.getBirthplace());
 			}
+			*/
+			/*
 			if (p.getCitizenship() != null) {
 				patientNode.setAttribute("citizenship", p.getCitizenship());
 			}
@@ -301,6 +303,10 @@ public class HibernatePatientSetDAO implements PatientSetDAO {
 			if (p.getDeathDate() != null) {
 				patientNode.setAttribute("death_date", df.format(p.getDeathDate()));
 			}
+			if (p.getDeathdateEstimated() != null) {
+				patientNode.setAttribute("deathdate_estimated", p.getDeathdateEstimated().toString());
+			}
+			
 			if (p.getCauseOfDeath() != null) {
 				patientNode.setAttribute("cause_of_death", p.getCauseOfDeath().getName(locale, false).getName());
 			}
@@ -1165,8 +1171,8 @@ public class HibernatePatientSetDAO implements PatientSetDAO {
 		if (patients != null)
 			criteria.add(Restrictions.in("obs.personId", patients.getMemberIds()));
 		
-		criteria.add(Expression.eq("obs.concept", c));
-		criteria.add(Expression.eq("obs.voided", false));
+		criteria.add(Restrictions.eq("obs.concept", c));
+		criteria.add(Restrictions.eq("obs.voided", false));
 		
 		if (showMostRecentFirst)
 			criteria.addOrder(org.hibernate.criterion.Order.desc("obs.obsDatetime"));
@@ -1442,10 +1448,10 @@ public class HibernatePatientSetDAO implements PatientSetDAO {
 			if (className.equals("org.openmrs.Person"))
 				// the voided column on the person table is mapped to the person object 
 				// through the getPersonVoided() to distinguish it from patient/user.voided 
-				criteria.add(Expression.eq("personVoided", false));
+				criteria.add(Restrictions.eq("personVoided", false));
 			else
 				// this is here to support PersonName and PersonAddress
-				criteria.add(Expression.eq("voided", false));
+				criteria.add(Restrictions.eq("voided", false));
 		}
 		// if one of the Patient tables
 		else {
@@ -1456,7 +1462,7 @@ public class HibernatePatientSetDAO implements PatientSetDAO {
 				criteria.add(Restrictions.in("patient.personId", patients.getMemberIds()));
 			
 			// do not include voided patients
-			criteria.add(Expression.eq("voided", false));
+			criteria.add(Restrictions.eq("voided", false));
 		}
 		criteria.setProjection(projectionList);
 		
@@ -2135,7 +2141,8 @@ public class HibernatePatientSetDAO implements PatientSetDAO {
 					ret.addMember((Integer) o[0]);
 					ret.addMember((Integer) o[1]);
 				}
-				ret.removeMember(target.getPersonId());
+				if (target != null)
+					ret.removeMember(target.getPersonId());
 				return Cohort.intersect(allPatients, ret);
 			} else if (includeAtoB) {
 				String hql = "select personA.id from Relationship where relationshipType = :relType";

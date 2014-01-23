@@ -68,6 +68,7 @@ import org.openmrs.util.OpenmrsConstants;
 import org.openmrs.util.OpenmrsUtil;
 import org.openmrs.util.PrivilegeConstants;
 import org.openmrs.validator.ConceptValidator;
+import org.openmrs.validator.ValidateUtil;
 import org.openmrs.web.WebConstants;
 import org.openmrs.web.controller.concept.ConceptReferenceTermWebValidator;
 import org.springframework.beans.propertyeditors.CustomDateEditor;
@@ -168,6 +169,7 @@ public class ConceptFormController extends SimpleFormController {
 	 * @should remove a concept map from an existing concept
 	 * @should ignore new concept map row if the user did not select a term
 	 * @should add a new Concept map when creating a concept
+	 * @should not save changes if there are validation errors
 	 */
 	@Override
 	protected ModelAndView onSubmit(HttpServletRequest request, HttpServletResponse response, Object obj,
@@ -253,13 +255,19 @@ public class ConceptFormController extends SimpleFormController {
 					concept.getCreator().getPersonName();
 				
 				try {
-					new ConceptValidator().validate(concept, errors);
+					ValidateUtil.validate(concept, errors);
 					
 					validateConceptUsesPersistedObjects(concept, errors);
 					
 					if (!errors.hasErrors()) {
+						if (action.equals(msa.getMessage("Concept.cancel"))) {
+							return new ModelAndView(new RedirectView("index.htm"));
+						}
 						cs.saveConcept(concept);
 						httpSession.setAttribute(WebConstants.OPENMRS_MSG_ATTR, "Concept.saved");
+						if (action.equals(msa.getMessage("Concept.save"))) {
+							return new ModelAndView(new RedirectView("concept.htm" + "?conceptId=" + concept.getConceptId()));
+						}
 						return new ModelAndView(new RedirectView(getSuccessView() + "?conceptId=" + concept.getConceptId()));
 					}
 					httpSession.setAttribute(WebConstants.OPENMRS_ERROR_ATTR, "Concept.cannot.save");
@@ -418,6 +426,8 @@ public class ConceptFormController extends SimpleFormController {
 		
 		public boolean precise = false;
 		
+		public Integer displayPrecision;
+		
 		public String units;
 		
 		public String handlerKey;
@@ -470,6 +480,7 @@ public class ConceptFormController extends SimpleFormController {
 				this.lowNormal = cn.getLowNormal();
 				this.hiNormal = cn.getHiNormal();
 				this.precise = cn.getPrecise();
+				this.displayPrecision = cn.getDisplayPrecision();
 				this.units = cn.getUnits();
 			} else if (concept.isComplex()) {
 				ConceptComplex complex = (ConceptComplex) concept;
@@ -501,9 +512,7 @@ public class ConceptFormController extends SimpleFormController {
 				}
 				
 				ConceptName shortNameInLocale = shortNamesByLocale.get(locale);
-				if (StringUtils.hasText(shortNameInLocale.getName())) {
-					concept.setShortName(shortNameInLocale);
-				}
+				concept.setShortName(shortNameInLocale);
 				
 				for (ConceptName synonym : synonymsByLocale.get(locale)) {
 					if (synonym != null && StringUtils.hasText(synonym.getName())) {
@@ -607,6 +616,7 @@ public class ConceptFormController extends SimpleFormController {
 				cn.setHiNormal(hiNormal);
 				cn.setLowNormal(lowNormal);
 				cn.setPrecise(precise);
+				cn.setDisplayPrecision(displayPrecision);
 				cn.setUnits(units);
 				
 				concept = cn;
@@ -1024,6 +1034,14 @@ public class ConceptFormController extends SimpleFormController {
 		 */
 		public void setConceptDrugList(List<Drug> conceptDrugList) {
 			this.conceptDrugList = conceptDrugList;
+		}
+		
+		public Integer getDisplayPrecision() {
+			return displayPrecision;
+		}
+		
+		public void setDisplayPrecision(Integer displayPrecision) {
+			this.displayPrecision = displayPrecision;
 		}
 	}
 	

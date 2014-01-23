@@ -119,7 +119,7 @@ public class HibernateUserDAO implements UserDAO {
 			systemId = "-";
 		
 		if (userId == null)
-			userId = new Integer(-1);
+			userId = Integer.valueOf(-1);
 		
 		String usernameWithCheckDigit = username;
 		try {
@@ -280,7 +280,7 @@ public class HibernateUserDAO implements UserDAO {
 		if (changeForUser == null)
 			throw new DAOException("Couldn't find user to set password for userId=" + userIdToChange);
 		User changedByUser = getUser(changedBy);
-		LoginCredential credentials = new LoginCredential();
+		LoginCredential credentials = getLoginCredential(changeForUser);
 		credentials.setUserId(userIdToChange);
 		credentials.setHashedPassword(newHashedPassword);
 		credentials.setSalt(salt);
@@ -395,8 +395,8 @@ public class HibernateUserDAO implements UserDAO {
 		if (object instanceof Number)
 			id = ((Number) query.uniqueResult()).intValue() + 1;
 		else {
-			log.warn("What is being returned here? Definitely nothing expected object value: '"
-					+ object + "' of class: " + object.getClass());
+			log.warn("What is being returned here? Definitely nothing expected object value: '" + object + "' of class: "
+			        + object.getClass());
 			id = 1;
 		}
 		
@@ -546,7 +546,7 @@ public class HibernateUserDAO implements UserDAO {
 			}
 		}
 		
-		if (includeRetired == false)
+		if (!includeRetired)
 			criteria.add("user.retired = false");
 		
 		// build the hql query

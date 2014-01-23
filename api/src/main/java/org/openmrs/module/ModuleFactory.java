@@ -24,8 +24,11 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Set;
 import java.util.SortedMap;
 import java.util.Vector;
 import java.util.WeakHashMap;
@@ -73,6 +76,8 @@ public class ModuleFactory {
 	private static final String MODULE_CHANGELOG_FILENAME = "liquibase.xml";
 	
 	private static final Map<String, DaemonToken> daemonTokens = new WeakHashMap<String, DaemonToken>();
+	
+	private static Set<String> actualStartupOrder;
 	
 	/**
 	 * Add a module (in the form of a jar file) to the list of openmrs modules Returns null if an
@@ -172,8 +177,8 @@ public class ModuleFactory {
 					Module mod = loadModule(f, true); // last module loaded wins
 					log.debug("Loaded module: " + mod + " successfully");
 				}
-				catch (Throwable t) {
-					log.debug("Unable to load file in module directory: " + f + ". Skipping file.", t);
+				catch (Exception e) {
+					log.debug("Unable to load file in module directory: " + f + ". Skipping file.", e);
 				}
 			}
 		}
@@ -186,6 +191,7 @@ public class ModuleFactory {
 	 * Modules that are already started will be skipped.
 	 */
 	public static void startModules() {
+		
 		// loop over and try starting each of the loaded modules
 		if (getLoadedModules().size() > 0) {
 			List<Module> leftoverModules = new Vector<Module>();
@@ -279,9 +285,7 @@ public class ModuleFactory {
 			// if we failed to start all the modules, error out
 			if (leftoverModules.size() > 0)
 				for (Module leftoverModule : leftoverModules) {
-					String message = "Unable to start module '" + leftoverModule.getName()
-					        + "'.  All required modules are not available: "
-					        + OpenmrsUtil.join(getMissingRequiredModules(leftoverModule), ", ");
+					String message = getFailedToStartModuleMessage(leftoverModule);
 					log.error(message);
 					leftoverModule.setStartupErrorMessage(message);
 					notifySuperUsersAboutModuleFailure(leftoverModule);
@@ -299,7 +303,7 @@ public class ModuleFactory {
 		try {
 			// Add the privileges necessary for notifySuperUsers
 			Context.addProxyPrivilege(PrivilegeConstants.MANAGE_ALERTS);
-			Context.addProxyPrivilege(PrivilegeConstants.VIEW_USERS);
+			Context.addProxyPrivilege(PrivilegeConstants.GET_USERS);
 			
 			// Send an alert to all administrators
 			Context.getAlertService().notifySuperUsers("Module.startupError.notification.message", null, mod.getName());
@@ -309,7 +313,7 @@ public class ModuleFactory {
 		}
 		finally {
 			// Remove added privileges
-			Context.removeProxyPrivilege(PrivilegeConstants.VIEW_USERS);
+			Context.removeProxyPrivilege(PrivilegeConstants.GET_USERS);
 			Context.removeProxyPrivilege(PrivilegeConstants.MANAGE_ALERTS);
 		}
 	}
@@ -347,8 +351,21 @@ public class ModuleFactory {
 	private static List<String> getMissingRequiredModules(Module module) {
 		List<String> ret = new ArrayList<String>();
 		for (String moduleName : module.getRequiredModules()) {
-			String moduleVersion = module.getRequiredModuleVersion(moduleName);
-			ret.add(moduleName + (moduleVersion != null ? " " + moduleVersion : ""));
+			boolean started = false;
+			for (Module mod : getStartedModules()) {
+				if (mod.getPackageName().equals(moduleName)) {
+					String reqVersion = module.getRequiredModuleVersion(moduleName);
+					if (reqVersion == null || ModuleUtil.compareVersion(mod.getVersion(), reqVersion) >= 0) {
+						started = true;
+					}
+					break;
+				}
+			}
+			
+			if (!started) {
+				String moduleVersion = module.getRequiredModuleVersion(moduleName);
+				ret.add(moduleName + (moduleVersion != null ? " " + moduleVersion : ""));
+			}
 		}
 		return ret;
 	}
@@ -390,6 +407,18 @@ public class ModuleFactory {
 		return Collections.emptyList();
 	}
 	
+	public static List<Module> getStartedModulesInOrder() {
+		List<Module> modules = new ArrayList<Module>();
+		if (actualStartupOrder != null) {
+			for (String moduleId : actualStartupOrder) {
+				modules.add(getStartedModulesMap().get(moduleId));
+			}
+		} else {
+			modules.addAll(getStartedModules());
+		}
+		return modules;
+	}
+	
 	/**
 	 * Returns the modules that have been successfully started in the form of a map&lt;ModuleId,
 	 * Module&gt;
@@ -417,7 +446,7 @@ public class ModuleFactory {
 			module = new ModuleFileParser(moduleFile).parse();
 		}
 		catch (ModuleException e) {
-			log.error("Error getting module object from file", e);
+			log.error("Error getting module object from file " + moduleFile.getName(), e);
 			throw e;
 		}
 		
@@ -492,7 +521,7 @@ public class ModuleFactory {
 	 * @param module Module to start
 	 */
 	public static Module startModuleInternal(Module module) throws ModuleException {
-		return startModuleInternal(module);
+		return startModuleInternal(module, false, null);
 	}
 	
 	/**
@@ -528,10 +557,7 @@ public class ModuleFactory {
 				
 				// check for required modules
 				if (!requiredModulesStarted(module)) {
-					throw new ModuleException("Module " + module.getName()
-					        + " cannot be added because it requires the following module(s): "
-					        + OpenmrsUtil.join(getMissingRequiredModules(module), ", ")
-					        + ". Please add and start these modules first.");
+					throw new ModuleException(getFailedToStartModuleMessage(module));
 				}
 				
 				// fire up the classloader for this module
@@ -599,8 +625,9 @@ public class ModuleFactory {
 					// be nobody because this is being run at startup)
 					Context.addProxyPrivilege("");
 					
-					for (String version : diffs.keySet()) {
-						String sql = diffs.get(version);
+					for (Map.Entry<String, String> entry : diffs.entrySet()) {
+						String version = entry.getKey();
+						String sql = entry.getValue();
 						if (StringUtils.hasText(sql))
 							runDiff(module, version, sql);
 					}
@@ -615,6 +642,10 @@ public class ModuleFactory {
 				
 				// effectively mark this module as started successfully
 				getStartedModulesMap().put(moduleId, module);
+				if (actualStartupOrder == null) {
+					actualStartupOrder = new LinkedHashSet<String>();
+				}
+				actualStartupOrder.add(moduleId);
 				
 				try {
 					// save the state of this module for future restarts
@@ -693,6 +724,18 @@ public class ModuleFactory {
 			ModuleUtil.refreshApplicationContext(applicationContext, isOpenmrsStartup, module);
 		
 		return module;
+	}
+	
+	/**
+	 * Gets the error message of a module which fails to start.
+	 * 
+	 * @param module the module that has failed to start.
+	 * @return the message text.
+	 */
+	private static String getFailedToStartModuleMessage(Module module) {
+		String[] params = { module.getName(), OpenmrsUtil.join(getMissingRequiredModules(module), ", ") };
+		return Context.getMessageSourceService().getMessage("Module.error.moduleCannotBeStarted", params,
+		    Context.getLocale());
 	}
 	
 	/**
@@ -898,8 +941,8 @@ public class ModuleFactory {
 				if (mod.getModuleActivator() != null)// if extends BaseModuleActivator
 					mod.getModuleActivator().willStop();
 			}
-			catch (Throwable t) {
-				log.warn("Unable to call module's Activator.willStop() method", t);
+			catch (Exception e) {
+				log.warn("Unable to call module's Activator.willStop() method", e);
 			}
 			
 			String moduleId = mod.getModuleId();
@@ -928,6 +971,12 @@ public class ModuleFactory {
 			}
 			
 			getStartedModulesMap().remove(moduleId);
+			if (actualStartupOrder != null) {
+				actualStartupOrder.remove(moduleId);
+				for (Module depModule : dependentModulesStopped) {
+					actualStartupOrder.remove(depModule.getModuleId());
+				}
+			}
 			
 			if (skipOverStartedProperty == false && !Context.isRefreshingContext()) {
 				saveGlobalProperty(moduleId + ".started", "false", getGlobalPropertyStartedDescription(moduleId));
@@ -950,13 +999,13 @@ public class ModuleFactory {
 								Context.removeAdvice(cls, (Advice) aopObject);
 							}
 						}
-						catch (Throwable t) {
-							log.warn("Could not remove advice point: " + advice.getPoint(), t);
+						catch (Exception e) {
+							log.warn("Could not remove advice point: " + advice.getPoint(), e);
 						}
 					}
 				}
-				catch (Throwable t) {
-					log.warn("Error while getting advicePoints from module: " + moduleId, t);
+				catch (Exception e) {
+					log.warn("Error while getting advicePoints from module: " + moduleId, e);
 				}
 				
 				// remove all extensions by this module
@@ -965,9 +1014,6 @@ public class ModuleFactory {
 						String extId = ext.getExtensionId();
 						try {
 							List<Extension> tmpExtensions = getExtensions(extId);
-							if (tmpExtensions == null)
-								tmpExtensions = new Vector<Extension>();
-							
 							tmpExtensions.remove(ext);
 							getExtensionMap().put(extId, tmpExtensions);
 						}
@@ -976,8 +1022,8 @@ public class ModuleFactory {
 						}
 					}
 				}
-				catch (Throwable t) {
-					log.warn("Error while getting extensions from module: " + moduleId, t);
+				catch (Exception e) {
+					log.warn("Error while getting extensions from module: " + moduleId, e);
 				}
 			}
 			
@@ -995,8 +1041,8 @@ public class ModuleFactory {
 				else
 					mod.getActivator().shutdown();//implements old  Activator interface
 			}
-			catch (Throwable t) {
-				log.warn("Unable to call module's Activator.shutdown() method", t);
+			catch (Exception e) {
+				log.warn("Unable to call module's Activator.shutdown() method", e);
 			}
 			
 			//Since extensions are loaded by the module class loader which is about to be disposed,
@@ -1104,12 +1150,8 @@ public class ModuleFactory {
 			}
 		}
 		
-		if (extensions != null) {
-			log.debug("Getting extensions defined by : " + pointId);
-			return extensions;
-		} else {
-			return new Vector<Extension>();
-		}
+		log.debug("Getting extensions defined by : " + pointId);
+		return extensions;
 	}
 	
 	/**
@@ -1442,8 +1484,32 @@ public class ModuleFactory {
 			
 			as.saveGlobalProperty(gp);
 		}
-		catch (Throwable t) {
-			log.warn("Unable to save the global property", t);
+		catch (Exception e) {
+			log.warn("Unable to save the global property", e);
 		}
+	}
+	
+	/**
+	 * Convenience method used to identify module interdependencies and alert the user before modules are shut down.
+	 * 
+	 * @param moduleId the moduleId used to identify the module being validated
+	 * @return List<dependentModules> the list of moduleId's which depend on the module about to be shutdown.
+	 * @since 1.10
+	 */
+	public static List<String> getDependencies(String moduleId) {
+		List<String> dependentModules = null;
+		Module module = getModuleById(moduleId);
+		
+		Map<String, Module> startedModules = getStartedModulesMap();
+		String modulePackage = module.getPackageName();
+		
+		for (Entry<String, Module> entry : startedModules.entrySet()) {
+			if (!moduleId.equals(entry.getKey()) && entry.getValue().getRequiredModules().contains(modulePackage)) {
+				if (dependentModules == null)
+					dependentModules = new ArrayList<String>();
+				dependentModules.add(entry.getKey() + " " + entry.getValue().getVersion());
+			}
+		}
+		return dependentModules;
 	}
 }
